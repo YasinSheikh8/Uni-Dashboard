@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { resolveDestination, suggestionsFor } from "../src/lib/destinations";
+import {
+  resolveDestination,
+  suggestDestinations,
+  suggestionsFor,
+} from "../src/lib/destinations";
 
 describe("resolveDestination", () => {
   it("reads an explicit ISO code", () => {
@@ -58,5 +62,45 @@ describe("suggestionsFor", () => {
 
   it("stays quiet on a single character", () => {
     assert.deepEqual(suggestionsFor("l"), []);
+  });
+});
+
+describe("suggestDestinations", () => {
+  it("ranks prefix matches before substring matches", () => {
+    const results = suggestDestinations("por");
+    assert.ok(results.length > 0);
+    assert.equal(results[0].city.toLowerCase().startsWith("por"), true);
+  });
+
+  it("returns a value the resolver can round-trip", () => {
+    // This is the contract that fixes the LiteAPI bug: whatever the list puts
+    // in the box must resolve to a complete location.
+    for (const suggestion of suggestDestinations("lis")) {
+      const resolved = resolveDestination(suggestion.value);
+      assert.equal(resolved.countryCode, suggestion.countryCode);
+      assert.equal(resolved.source, "explicit");
+    }
+  });
+
+  it("collapses alternate spellings onto one row", () => {
+    const values = suggestDestinations("lisb").map((s) => s.value);
+    assert.equal(values.filter((v) => v.endsWith(", PT")).length, 1, values.join(","));
+  });
+
+  it("still matches an accented or local spelling", () => {
+    assert.equal(suggestDestinations("münch")[0]?.value, "Munich, DE");
+    assert.equal(suggestDestinations("munch")[0]?.value, "Munich, DE");
+  });
+
+  it("labels with the country name, not the code", () => {
+    assert.equal(suggestDestinations("lisb")[0].label, "Lisbon, Portugal");
+  });
+
+  it("stays quiet under two characters", () => {
+    assert.deepEqual(suggestDestinations("l"), []);
+  });
+
+  it("returns nothing for an unknown place rather than guessing", () => {
+    assert.deepEqual(suggestDestinations("zzzzz"), []);
   });
 });

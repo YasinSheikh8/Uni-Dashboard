@@ -215,6 +215,7 @@ export async function searchHotels(
   return {
     hotels,
     diagnostics,
+    resolvedCity: query.destination,
     resolvedCountryCode: query.countryCode,
     currency: query.currency,
     nights: hotels[0]?.nights ?? 1,

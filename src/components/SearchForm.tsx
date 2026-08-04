@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { DestinationInput } from "./DestinationInput";
 
 function isoDate(daysFromNow: number): string {
   const date = new Date();
@@ -50,14 +51,24 @@ export function SearchForm({
         className="grid gap-px overflow-hidden rounded-[var(--radius-card)] bg-[var(--color-border)] sm:grid-cols-[1.7fr_1fr_1fr_0.62fr_auto]"
         style={{ boxShadow: "var(--elev-3)" }}
       >
-        <Field
-          id="destination"
-          label="Where"
-          value={destination}
-          onChange={setDestination}
-          placeholder="City or hotel"
-          required
-        />
+        {/* A combobox rather than a plain field: picking a suggestion writes
+            "Lisbon, PT", which gives the supplier a complete location. A bare
+            city is rejected by LiteAPI, which is how this used to fail. */}
+        <label
+          htmlFor="destination"
+          className="cursor-text bg-[var(--color-surface)] px-5 py-3.5 transition-colors focus-within:bg-[var(--color-surface-sunken)]"
+        >
+          <span className="label mb-1">Where</span>
+          <DestinationInput
+            id="destination"
+            name="destination"
+            value={destination}
+            onChange={setDestination}
+            placeholder="City, e.g. Lisbon"
+            className="input"
+            required
+          />
+        </label>
         <Field
           id="checkIn"
           label="Check in"
