@@ -1,0 +1,234 @@
+@import "tailwindcss";
+
+/*
+ * Design tokens.
+ *
+ * The brief was clean, sleek, no clutter, so the system is deliberately narrow:
+ * one neutral ramp, one accent, one positive colour reserved exclusively for
+ * savings. Anything that is not price, place or date is muted. If a new colour
+ * feels necessary, the layout is probably doing too much.
+ */
+@theme {
+  --color-canvas: #fbfbfd;
+  --color-surface: #ffffff;
+  --color-surface-sunken: #f4f4f7;
+  --color-border: #e7e7ec;
+  --color-border-strong: #d6d6de;
+
+  --color-ink: #131318;
+  --color-ink-soft: #5c5c6a;
+  --color-ink-faint: #8b8b99;
+
+  --color-accent: #131318;
+  --color-accent-soft: #f0f0f4;
+
+  /* Reserved for money the user saves. Never used decoratively. */
+  --color-save: #0f7b52;
+  --color-save-soft: #e8f5ef;
+
+  --color-warn: #b45309;
+  --color-warn-soft: #fdf3e7;
+  --color-danger: #b42318;
+  --color-danger-soft: #fdeceb;
+
+  --radius-card: 16px;
+  --radius-control: 11px;
+
+  --font-sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Inter, Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+/*
+ * Dark palette.
+ *
+ * These are plain custom-property overrides on :root, NOT a second `@theme`
+ * block. Tailwind v4 hoists `@theme` to the top level and strips the media
+ * query around it, so a nested `@theme` would apply its values unconditionally
+ * and every visitor would get the dark palette.
+ */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-canvas: #0a0a0c;
+    --color-surface: #141418;
+    --color-surface-sunken: #1c1c21;
+    --color-border: #26262d;
+    --color-border-strong: #34343d;
+
+    --color-ink: #f3f3f5;
+    --color-ink-soft: #a1a1ae;
+    --color-ink-faint: #71717f;
+
+    --color-accent: #f3f3f5;
+    --color-accent-soft: #22222a;
+
+    --color-save: #35c48b;
+    --color-save-soft: #10281f;
+
+    --color-warn: #e0a34a;
+    --color-warn-soft: #2a2113;
+    --color-danger: #f27a70;
+    --color-danger-soft: #2c1614;
+  }
+}
+
+* {
+  border-color: var(--color-border);
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Tabular figures everywhere a price is shown, so columns of money line up
+   and digits do not jitter as values change. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+@layer components {
+  .card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+  }
+
+  .input {
+    width: 100%;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-control);
+    padding: 0.6rem 0.8rem;
+    font-size: 0.95rem;
+    color: var(--color-ink);
+    outline: none;
+    transition: border-color 120ms ease, box-shadow 120ms ease;
+  }
+
+  .input:focus {
+    border-color: var(--color-border-strong);
+    box-shadow: 0 0 0 3px var(--color-accent-soft);
+  }
+
+  .input::placeholder {
+    color: var(--color-ink-faint);
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: var(--radius-control);
+    padding: 0.6rem 1.1rem;
+    font-size: 0.925rem;
+    font-weight: 550;
+    line-height: 1.2;
+    cursor: pointer;
+    transition: opacity 120ms ease, background-color 120ms ease;
+    border: 1px solid transparent;
+  }
+
+  .btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  .btn-primary {
+    background: var(--color-accent);
+    color: var(--color-canvas);
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    opacity: 0.88;
+  }
+
+  .btn-secondary {
+    background: var(--color-surface);
+    border-color: var(--color-border-strong);
+    color: var(--color-ink);
+  }
+
+  .btn-secondary:hover:not(:disabled) {
+    background: var(--color-surface-sunken);
+  }
+
+  .btn-ghost {
+    background: transparent;
+    color: var(--color-ink-soft);
+  }
+
+  .btn-ghost:hover:not(:disabled) {
+    color: var(--color-ink);
+  }
+
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    border-radius: 999px;
+    padding: 0.2rem 0.6rem;
+    font-size: 0.75rem;
+    font-weight: 550;
+    letter-spacing: 0.005em;
+  }
+
+  .pill-save {
+    background: var(--color-save-soft);
+    color: var(--color-save);
+  }
+
+  .pill-muted {
+    background: var(--color-surface-sunken);
+    color: var(--color-ink-soft);
+  }
+
+  .pill-warn {
+    background: var(--color-warn-soft);
+    color: var(--color-warn);
+  }
+
+  .pill-danger {
+    background: var(--color-danger-soft);
+    color: var(--color-danger);
+  }
+
+  .label {
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--color-ink-faint);
+    margin-bottom: 0.35rem;
+  }
+}
+
+@keyframes shimmer {
+  from { background-position: -600px 0; }
+  to { background-position: 600px 0; }
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-surface-sunken) 0%,
+    var(--color-border) 50%,
+    var(--color-surface-sunken) 100%
+  );
+  background-size: 600px 100%;
+  animation: shimmer 1.4s infinite linear;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton { animation: none; }
+  * { transition-duration: 0.01ms !important; }
+}
