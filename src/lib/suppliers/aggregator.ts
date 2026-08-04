@@ -131,6 +131,13 @@ export async function searchHotels(
     if (quotes.length === 0) continue;
     quotes.sort((a, b) => a.comparableAmount - b.comparableAmount);
 
+    // Product rule: only ever show a stay we can actually sell. A hotel whose
+    // every quote is price-reference only would put a competitor's price in
+    // front of the customer, so it is dropped from results entirely. The
+    // reference data still informs `cheaperElsewhere` and the stored audit
+    // trail — it is an internal pricing signal, never a user-facing one.
+    if (!quotes.some((quote) => quote.bookable)) continue;
+
     // The winner is the cheapest rate we can actually SELL. A scraped price
     // that undercuts it is real information, but it is not a booking — letting
     // it win here would hand the booking engine a rate with no token behind it.

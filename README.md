@@ -15,6 +15,11 @@ Three things carry the product:
    instantly. Friends settle up afterwards without the reservation ever waiting
    on them.
 
+Everything happens on the platform. Rooms are sold through our own booking
+engine, and cards are collected in place against a Stripe SetupIntent — there is
+no hand-off to a hosted checkout page and no link out to a supplier's site
+anywhere in the product.
+
 ---
 
 ## Quick start
@@ -131,20 +136,22 @@ on the charge, which reconciles into a real bug.
 Off by default. `SCRAPER_ENABLED=true` plus `SCRAPER_TARGETS=booking,hotels`
 adds public listing prices to the comparison.
 
-**Scraped prices are reference only and can never be booked.** There is no rate
-token behind a number lifted off a search page, so:
+**Scraped prices are an internal signal and are never shown to customers.**
+There is no rate token behind a number lifted off a search page, so:
 
 - the aggregator picks the winner from *bookable* quotes only — a cheaper
   scraped price never becomes the thing you buy;
 - `savedAmount` is computed against bookable sources only, so we never claim a
   saving over something we cannot sell;
-- when a reference price undercuts our bookable rate, the UI says so and links
-  out (`cheaperElsewhere`), rather than hiding it or quietly showing a price
-  that would fail at checkout;
-- a hotel *only* a reference source has renders as a referral row with no
-  Select button;
+- a hotel whose every quote is reference-only is **dropped from results
+  entirely**, because listing it would put a competitor's price and an off-site
+  link in front of the customer;
 - `createBooking` rejects a non-bookable provider outright, so a hand-crafted
   request cannot route around the above.
+
+`cheaperElsewhere` is still computed and the full quote set is still stored on
+the booking, but neither is rendered. They exist for your own pricing
+intelligence — "how often are we beaten, and by how much" — not for the guest.
 
 What the scraper does technically: reads schema.org JSON-LD — the structured
 data sites publish for search engines — rather than pattern-matching rendered
@@ -187,8 +194,13 @@ Three things worth knowing:
    `POST /api/cron/settle`, guarded by a `CRON_SECRET` bearer token compared in
    constant time. The endpoint refuses to run if the secret is unset. Without
    this schedule, card authorizations expire and the money is uncollectible.
-3. **Set `NEXT_PUBLIC_APP_URL` to the deployed origin**, or the Stripe Checkout
-   return leg will bounce back to localhost.
+3. **Set `NEXT_PUBLIC_APP_URL` to the deployed origin.** It is used for absolute
+   links; the settlement function falls back to it when Netlify's own `URL` is
+   unavailable.
+
+Do not set `NODE_ENV` in `netlify.toml`. Forcing it to `production` makes npm
+skip devDependencies, which removes the build toolchain and breaks the
+production context while leaving deploy previews green.
 
 Required environment variables in Netlify: `DATABASE_URL`, `SESSION_SECRET`,
 `CRON_SECRET`, `NEXT_PUBLIC_APP_URL`, plus whichever supplier and Stripe keys

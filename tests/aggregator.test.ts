@@ -119,7 +119,7 @@ describe("searchHotels with a reference source", () => {
     assert.equal(merged.cheaperElsewhere, null);
   });
 
-  it("marks a hotel only a reference source has as unbookable", async () => {
+  it("drops a hotel only a reference source has, rather than listing it", async () => {
     const supplier = new FixtureProvider("fixture-a", "Demo Supplier A", 1);
     const reference = new UndercuttingReference([
       { name: "Reference Only Palace", total: 12_345 },
@@ -128,8 +128,22 @@ describe("searchHotels with a reference source", () => {
     const result = await searchHotels(QUERY, "best_price", [supplier, reference]);
     const orphan = result.hotels.find((hotel) => hotel.name === "Reference Only Palace");
 
-    assert.ok(orphan, "the hotel should still appear as a referral row");
-    assert.equal(orphan!.best, null, "there is nothing bookable to select");
-    assert.equal(orphan!.quotes.length, 1);
+    // Listing it would put a competitor's price in front of the customer.
+    assert.equal(orphan, undefined, "a stay we cannot sell must not be listed");
+  });
+
+  it("never returns a row without a bookable winner", async () => {
+    const supplier = new FixtureProvider("fixture-a", "Demo Supplier A", 1);
+    const reference = new UndercuttingReference([
+      { name: "Reference Only Palace", total: 12_345 },
+      { name: "Another Ghost Hotel", total: 22_222 },
+    ]);
+
+    const result = await searchHotels(QUERY, "best_price", [supplier, reference]);
+    assert.ok(result.hotels.length > 0);
+    for (const hotel of result.hotels) {
+      assert.ok(hotel.best, `${hotel.name} must have a bookable winner`);
+      assert.equal(hotel.best!.bookable, true);
+    }
   });
 });

@@ -9,12 +9,21 @@ function isoDate(daysFromNow: number): string {
   return date.toISOString().slice(0, 10);
 }
 
+/**
+ * One horizontal surface, four fields, one action. Field labels are small and
+ * quiet; the values are what you read. Everything optional (rooms, currency,
+ * sort) lives elsewhere — a search bar that asks six questions gets used for
+ * none of them.
+ */
 export function SearchForm({
   defaults,
-  compact = false,
 }: {
-  defaults?: { destination?: string; checkIn?: string; checkOut?: string; guests?: string };
-  compact?: boolean;
+  defaults?: {
+    destination?: string;
+    checkIn?: string;
+    checkOut?: string;
+    guests?: string;
+  };
 }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
@@ -30,80 +39,58 @@ export function SearchForm({
     event.preventDefault();
     if (invalidDates) return;
     setPending(true);
-    const params = new URLSearchParams({ destination, checkIn, checkOut, guests });
-    router.push(`/search?${params.toString()}`);
+    router.push(
+      `/search?${new URLSearchParams({ destination, checkIn, checkOut, guests }).toString()}`,
+    );
   }
 
   return (
-    <form
-      onSubmit={submit}
-      className={`card p-2 ${compact ? "" : "shadow-[0_1px_2px_rgba(0,0,0,0.04),0_12px_32px_-12px_rgba(0,0,0,0.12)]"}`}
-    >
-      <div className="grid gap-2 sm:grid-cols-[1.6fr_1fr_1fr_0.7fr_auto]">
-        <div className="px-2 py-1">
-          <label className="label" htmlFor="destination">
-            Where
-          </label>
-          <input
-            id="destination"
-            className="input border-0 px-0 py-0 focus:shadow-none"
-            placeholder="City or hotel"
-            value={destination}
-            onChange={(event) => setDestination(event.target.value)}
-            required
-          />
-        </div>
+    <form onSubmit={submit}>
+      <div
+        className="grid gap-px overflow-hidden rounded-[var(--radius-card)] bg-[var(--color-border)] sm:grid-cols-[1.7fr_1fr_1fr_0.62fr_auto]"
+        style={{ boxShadow: "var(--elev-3)" }}
+      >
+        <Field
+          id="destination"
+          label="Where"
+          value={destination}
+          onChange={setDestination}
+          placeholder="City or hotel"
+          required
+        />
+        <Field
+          id="checkIn"
+          label="Check in"
+          type="date"
+          value={checkIn}
+          min={isoDate(0)}
+          onChange={setCheckIn}
+          required
+        />
+        <Field
+          id="checkOut"
+          label="Check out"
+          type="date"
+          value={checkOut}
+          min={checkIn}
+          onChange={setCheckOut}
+          required
+        />
+        <Field
+          id="guests"
+          label="Guests"
+          type="number"
+          value={guests}
+          onChange={setGuests}
+          min="1"
+          max="12"
+          required
+        />
 
-        <div className="border-l border-[var(--color-border)] px-3 py-1 sm:pl-4">
-          <label className="label" htmlFor="checkIn">
-            Check in
-          </label>
-          <input
-            id="checkIn"
-            type="date"
-            className="input border-0 px-0 py-0 focus:shadow-none"
-            value={checkIn}
-            min={isoDate(0)}
-            onChange={(event) => setCheckIn(event.target.value)}
-            required
-          />
-        </div>
-
-        <div className="border-l border-[var(--color-border)] px-3 py-1 sm:pl-4">
-          <label className="label" htmlFor="checkOut">
-            Check out
-          </label>
-          <input
-            id="checkOut"
-            type="date"
-            className="input border-0 px-0 py-0 focus:shadow-none"
-            value={checkOut}
-            min={checkIn}
-            onChange={(event) => setCheckOut(event.target.value)}
-            required
-          />
-        </div>
-
-        <div className="border-l border-[var(--color-border)] px-3 py-1 sm:pl-4">
-          <label className="label" htmlFor="guests">
-            Guests
-          </label>
-          <input
-            id="guests"
-            type="number"
-            min={1}
-            max={12}
-            className="input border-0 px-0 py-0 focus:shadow-none"
-            value={guests}
-            onChange={(event) => setGuests(event.target.value)}
-            required
-          />
-        </div>
-
-        <div className="flex items-end p-1">
+        <div className="flex items-center bg-[var(--color-surface)] p-2.5">
           <button
             type="submit"
-            className="btn btn-primary h-11 w-full sm:w-auto"
+            className="btn btn-aurora h-full w-full px-7 sm:w-auto"
             disabled={pending || invalidDates}
           >
             {pending ? "Searching…" : "Search"}
@@ -112,10 +99,52 @@ export function SearchForm({
       </div>
 
       {invalidDates && (
-        <p className="px-3 pb-2 text-xs text-[var(--color-danger)]">
+        <p className="mt-2 pl-5 text-xs text-[var(--color-danger)]">
           Check-out has to be after check-in.
         </p>
       )}
     </form>
+  );
+}
+
+function Field({
+  id,
+  label,
+  value,
+  onChange,
+  type = "text",
+  placeholder,
+  required,
+  min,
+  max,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  type?: string;
+  placeholder?: string;
+  required?: boolean;
+  min?: string;
+  max?: string;
+}) {
+  return (
+    <label
+      htmlFor={id}
+      className="cursor-text bg-[var(--color-surface)] px-5 py-3.5 transition-colors focus-within:bg-[var(--color-surface-sunken)]"
+    >
+      <span className="label mb-1">{label}</span>
+      <input
+        id={id}
+        type={type}
+        className="input"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        required={required}
+        min={min}
+        max={max}
+      />
+    </label>
   );
 }

@@ -36,7 +36,7 @@ export function AuthForm({
           <label className="label" htmlFor="name">
             Name
           </label>
-          <input id="name" name="name" className="input" autoComplete="name" required />
+          <input id="name" name="name" className="input input-boxed" autoComplete="name" required />
         </div>
       )}
 
@@ -48,7 +48,7 @@ export function AuthForm({
           id="email"
           name="email"
           type="email"
-          className="input"
+          className="input input-boxed"
           autoComplete="email"
           required
         />
@@ -62,7 +62,7 @@ export function AuthForm({
           id="password"
           name="password"
           type="password"
-          className="input"
+          className="input input-boxed"
           autoComplete={isSignUp ? "new-password" : "current-password"}
           minLength={8}
           required

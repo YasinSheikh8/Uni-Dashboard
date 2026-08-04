@@ -1,75 +1,100 @@
 import Link from "next/link";
 import { SearchForm } from "@/components/SearchForm";
+import { PriceStack } from "@/components/PriceStack";
 import { getCurrentUser, isInstantBookReady } from "@/lib/auth";
-import { getProviders, isUsingFixtures } from "@/lib/suppliers";
+import { isUsingFixtures } from "@/lib/suppliers";
 
 export default async function HomePage() {
   const user = await getCurrentUser();
-  const providers = getProviders();
   const ready = user ? isInstantBookReady(user) : false;
 
   return (
-    <div className="mx-auto max-w-6xl px-5">
-      <section className="pt-16 pb-10 sm:pt-24">
-        <h1 className="max-w-2xl text-4xl font-semibold leading-[1.08] tracking-[-0.02em] sm:text-[3.25rem]">
-          Find the room. Tap once. Split it with whoever is coming.
-        </h1>
-        <p className="mt-4 max-w-xl text-[1.05rem] leading-relaxed text-[var(--color-ink-soft)]">
-          We price every room against {providers.length} suppliers at once and show you
-          the cheaper one. Your details are saved, so booking is a single tap —
-          and paying for it together takes one more.
-        </p>
+    <div className="relative">
+      <div className="aurora-wash" />
 
-        <div className="mt-9">
+      <section className="relative mx-auto max-w-6xl px-6 pt-14 sm:pt-24">
+        <div className="grid items-center gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:gap-4">
+          <div className="rise">
+            <h1 className="display max-w-[15ch] text-[2.75rem] sm:text-[3.75rem] lg:text-[4.25rem]">
+              One room. One tap. Split however you like.
+            </h1>
+
+            <p className="mt-6 max-w-[42ch] text-[1.0625rem] leading-relaxed text-[var(--color-ink-soft)]">
+              We price every supplier at once and show you the cheaper one.
+              Your details are already saved, so booking is a single tap.
+            </p>
+          </div>
+
+          <div className="rise" style={{ animationDelay: "120ms" }}>
+            <PriceStack />
+          </div>
+        </div>
+
+        <div className="rise mt-4 sm:mt-8" style={{ animationDelay: "220ms" }}>
           <SearchForm />
         </div>
 
         {user && !ready && (
-          <div className="mt-4 flex flex-wrap items-center gap-3 rounded-[var(--radius-control)] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm">
+          <div className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
             <span className="text-[var(--color-ink-soft)]">
-              One-tap booking needs your traveler details and a card on file.
+              One-tap booking needs your details and a card.
             </span>
-            <Link href="/account" className="btn btn-secondary py-1.5 text-sm">
+            <Link href="/account" className="font-medium underline underline-offset-4">
               Finish setup
             </Link>
           </div>
         )}
       </section>
 
-      <section className="grid gap-px overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-border)] sm:grid-cols-3">
-        <Feature
-          title="Every supplier, one row"
-          body="The same hotel from different suppliers is matched into a single result, so you compare rooms instead of listings."
-        />
-        <Feature
-          title="Booked before they reply"
-          body="Your card guarantees the room the moment you tap. Friends settle up afterwards — the reservation never waits on them."
-        />
-        <Feature
-          title="Split without the spreadsheet"
-          body="Add whoever is coming, shares are calculated to the cent, and everyone pays their own part in the app."
-        />
-      </section>
+      {/* Three statements, no boxes. Cards here would compete with the hero. */}
+      <section className="mx-auto mt-28 max-w-6xl px-6 pb-24 sm:mt-40">
+        <div className="grid gap-x-12 gap-y-10 sm:grid-cols-3">
+          <Point
+            index="01"
+            title="Every supplier, one row"
+            body="The same hotel from different suppliers is matched into a single result. You compare rooms, not listings."
+          />
+          <Point
+            index="02"
+            title="Booked before they reply"
+            body="Your card guarantees the room the moment you tap. Friends settle up afterwards."
+          />
+          <Point
+            index="03"
+            title="Split to the cent"
+            body="Add whoever is coming. Everyone pays their own share in the app."
+          />
+        </div>
 
-      {isUsingFixtures() && (
-        <p className="mt-6 rounded-[var(--radius-control)] border border-[var(--color-border)] bg-[var(--color-warn-soft)] px-4 py-3 text-sm text-[var(--color-warn)]">
-          <strong className="font-semibold">Demo data.</strong> No supplier keys are
-          configured, so results come from two built-in demo suppliers. Add
-          <code className="mx-1 rounded bg-black/5 px-1 py-0.5 text-xs dark:bg-white/10">
-            LITEAPI_KEY
-          </code>
-          or Amadeus credentials to <code className="text-xs">.env</code> for live rates.
-        </p>
-      )}
+        {isUsingFixtures() && (
+          <p className="mt-20 text-xs leading-relaxed text-[var(--color-ink-faint)]">
+            Running on demo suppliers — no supplier keys are configured. Add
+            <code className="mx-1">LITEAPI_KEY</code> or Amadeus credentials for live rates.
+          </p>
+        )}
+      </section>
     </div>
   );
 }
 
-function Feature({ title, body }: { title: string; body: string }) {
+function Point({
+  index,
+  title,
+  body,
+}: {
+  index: string;
+  title: string;
+  body: string;
+}) {
   return (
-    <div className="bg-[var(--color-surface)] p-6">
-      <h2 className="text-[0.95rem] font-semibold">{title}</h2>
-      <p className="mt-2 text-sm leading-relaxed text-[var(--color-ink-soft)]">{body}</p>
+    <div>
+      <span className="tabular text-xs font-medium text-[var(--color-ink-faint)]">
+        {index}
+      </span>
+      <h2 className="mt-3 text-[1.0625rem] font-semibold tracking-[-0.01em]">{title}</h2>
+      <p className="mt-2 text-[0.9375rem] leading-relaxed text-[var(--color-ink-soft)]">
+        {body}
+      </p>
     </div>
   );
 }

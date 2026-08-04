@@ -4,15 +4,15 @@ import { getCurrentUser } from "@/lib/auth";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Hotelbook — book in one tap, split with friends",
+  title: "Hotelbook — one room, one tap, split however you like",
   description:
-    "Every supplier checked, cheapest rate surfaced, one-tap booking and payment splitting built in.",
+    "Every supplier priced at once, the cheaper one surfaced, one-tap booking and payment splitting built in.",
 };
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#fbfbfd" },
-    { media: "(prefers-color-scheme: dark)", color: "#0a0a0c" },
+    { media: "(prefers-color-scheme: light)", color: "#fcfcfd" },
+    { media: "(prefers-color-scheme: dark)", color: "#08080b" },
   ],
 };
 
@@ -20,9 +20,23 @@ async function Header() {
   const user = await getCurrentUser();
 
   return (
-    <header className="sticky top-0 z-40 border-b border-[var(--color-border)] bg-[var(--color-canvas)]/85 backdrop-blur-lg">
-      <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-5">
-        <Link href="/" className="text-[0.98rem] font-semibold tracking-tight">
+    <header className="sticky top-0 z-50 border-b border-[var(--color-border)]/60 bg-[var(--color-canvas)]/70 backdrop-blur-xl">
+      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
+        <Link
+          href="/"
+          className="flex items-center gap-2.5 text-[0.9375rem] font-semibold tracking-[-0.01em]"
+        >
+          {/* Mark: three planes converging — the same idea as the hero object,
+              reduced to something that survives at 18px. */}
+          <span
+            className="grid h-[22px] w-[22px] place-items-center rounded-[7px]"
+            style={{
+              background:
+                "linear-gradient(140deg, var(--aurora-1) 0%, var(--aurora-2) 60%, var(--aurora-3) 130%)",
+            }}
+          >
+            <span className="h-[7px] w-[7px] rounded-[2px] bg-white/90" />
+          </span>
           Hotelbook
         </Link>
 
@@ -36,7 +50,7 @@ async function Header() {
                 Account
               </Link>
               <span
-                className="ml-1 grid h-8 w-8 place-items-center rounded-full text-xs font-semibold text-white"
+                className="ml-1.5 grid h-8 w-8 place-items-center rounded-full text-xs font-semibold text-white"
                 style={{ background: user.avatarColor }}
                 title={user.name}
               >
@@ -67,9 +81,6 @@ export default function RootLayout({
       <body className="min-h-screen">
         <Header />
         <main>{children}</main>
-        <footer className="mx-auto mt-20 max-w-6xl px-5 pb-10 text-xs text-[var(--color-ink-faint)]">
-          Prices are compared across every connected supplier at search time.
-        </footer>
       </body>
     </html>
   );

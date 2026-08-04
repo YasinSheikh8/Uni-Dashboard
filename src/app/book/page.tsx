@@ -159,46 +159,6 @@ export default async function BookPage({
           </div>
         </div>
 
-        <div className="card mt-4 p-6">
-          <h2 className="text-sm font-semibold">What each supplier quoted</h2>
-          <table className="mt-3 w-full text-sm">
-            <tbody>
-              {hotel.quotes.map((quote) => {
-                const winner = quote.supplier === chosen.supplier;
-                return (
-                  <tr key={quote.supplier} className="border-t border-[var(--color-border)]">
-                    <td className="py-2.5">
-                      {quote.supplierLabel}
-                      {winner && <span className="pill pill-save ml-2">Booking this</span>}
-                      {!quote.bookable && (
-                        <span className="pill pill-muted ml-2">reference only</span>
-                      )}
-                    </td>
-                    <td className="py-2.5 text-xs text-[var(--color-ink-faint)]">
-                      {quote.rate.roomName}
-                    </td>
-                    <td className="tabular py-2.5 text-right font-medium">
-                      {formatMoney(quote.comparableAmount, hotel.currency)}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          {hotel.savedAmount > 0 && (
-            <p className="mt-3 text-xs text-[var(--color-save)]">
-              {formatMoney(hotel.savedAmount, hotel.currency)} cheaper than the next
-              supplier for this exact hotel.
-            </p>
-          )}
-          {hotel.cheaperElsewhere && (
-            <p className="mt-2 text-xs text-[var(--color-warn)]">
-              {hotel.cheaperElsewhere.supplierLabel} lists this hotel at{" "}
-              {formatMoney(hotel.cheaperElsewhere.comparableAmount, hotel.currency)}. We
-              can&apos;t book that rate — it is a listed price, not one of our suppliers.
-            </p>
-          )}
-        </div>
       </section>
 
       <BookingPanel
