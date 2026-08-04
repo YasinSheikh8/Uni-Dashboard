@@ -1,7 +1,9 @@
 "use client";
 
 import { useActionState } from "react";
+import { useRouter } from "next/navigation";
 import { addCard, addFriend, saveProfile, type ActionState } from "@/app/actions";
+import { AddCardForm } from "./AddCardForm";
 
 function Message({ state }: { state: ActionState }) {
   if (state.error) {
@@ -85,7 +87,7 @@ function Field({
       <input
         id={name}
         name={name}
-        className="input"
+        className="input input-boxed"
         defaultValue={defaultValue ?? ""}
         placeholder={placeholder}
         required={required}
@@ -102,6 +104,7 @@ export function CardSection({
   stripeLive: boolean;
 }) {
   const [state, formAction, pending] = useActionState(addCard, {} as ActionState);
+  const router = useRouter();
 
   return (
     <div className="card p-6">
@@ -132,17 +135,21 @@ export function CardSection({
 
       <Message state={state} />
 
-      <form action={formAction}>
-        <button type="submit" className="btn btn-secondary mt-4" disabled={pending}>
-          {pending ? "Opening…" : stripeLive ? "Add a card" : "Add test card"}
-        </button>
-      </form>
-
-      {!stripeLive && (
-        <p className="mt-3 text-xs text-[var(--color-ink-faint)]">
-          Stripe is not configured, so this attaches a stub card and no money moves.
-          Set <code>STRIPE_SECRET_KEY</code> to collect real cards through Stripe Checkout.
-        </p>
+      {stripeLive ? (
+        // Collected in place — no hop to a hosted checkout page.
+        <AddCardForm onSaved={() => router.refresh()} />
+      ) : (
+        <>
+          <form action={formAction}>
+            <button type="submit" className="btn btn-secondary mt-4" disabled={pending}>
+              {pending ? "Adding…" : "Add test card"}
+            </button>
+          </form>
+          <p className="mt-3 text-xs text-[var(--color-ink-faint)]">
+            Stripe is not configured, so this attaches a stub card and no money moves.
+            Set <code>STRIPE_SECRET_KEY</code> to collect real cards.
+          </p>
+        </>
       )}
     </div>
   );
@@ -183,7 +190,7 @@ export function FriendsSection({
         <input
           name="email"
           type="email"
-          className="input"
+          className="input input-boxed"
           placeholder="friend@example.com"
           required
         />

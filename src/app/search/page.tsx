@@ -3,7 +3,6 @@ import Link from "next/link";
 import { SearchForm } from "@/components/SearchForm";
 import { HotelCard } from "@/components/HotelCard";
 import { searchHotels, type SortMode } from "@/lib/suppliers/aggregator";
-import { formatMoney } from "@/lib/money";
 
 export const dynamic = "force-dynamic";
 
@@ -34,8 +33,8 @@ export default async function SearchPage({
   };
 
   return (
-    <div className="mx-auto max-w-6xl px-5 py-8">
-      <SearchForm compact defaults={query} />
+    <div className="mx-auto max-w-5xl px-6 py-8">
+      <SearchForm defaults={query} />
 
       <Suspense key={JSON.stringify(query)} fallback={<ResultsSkeleton />}>
         <Results query={query} />
@@ -59,8 +58,8 @@ async function Results({
 }) {
   if (!query.destination || !query.checkIn || !query.checkOut) {
     return (
-      <p className="mt-10 text-sm text-[var(--color-ink-soft)]">
-        Tell us where and when, and we&apos;ll price it everywhere at once.
+      <p className="mt-16 text-center text-sm text-[var(--color-ink-soft)]">
+        Tell us where and when.
       </p>
     );
   }
@@ -79,37 +78,26 @@ async function Results({
   );
 
   const failed = result.diagnostics.filter((entry) => entry.status !== "ok");
-  const totalSavings = result.hotels.reduce((sum, hotel) => sum + hotel.savedAmount, 0);
-
   const sortHref = (sort: SortMode) =>
     `/search?${new URLSearchParams({ ...query, sort }).toString()}`;
 
   return (
     <>
-      <div className="mt-8 flex flex-wrap items-baseline justify-between gap-3">
+      <div className="mt-12 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold tracking-[-0.01em]">
+          <h1 className="display text-[1.75rem]">
             {result.hotels.length} stay{result.hotels.length === 1 ? "" : "s"} in{" "}
             {query.destination}
           </h1>
-          <p className="mt-1 text-sm text-[var(--color-ink-soft)]">
-            Checked {result.diagnostics.length} supplier
-            {result.diagnostics.length === 1 ? "" : "s"} ·{" "}
-            {result.diagnostics
-              .map((entry) => `${entry.supplierLabel} ${entry.durationMs}ms`)
-              .join(" · ")}
-            {totalSavings > 0 && (
-              <>
-                {" · "}
-                <span className="text-[var(--color-save)]">
-                  {formatMoney(totalSavings, result.currency)} undercut across these results
-                </span>
-              </>
-            )}
+          {/* Source count, not source telemetry. Response times are a developer
+              concern and belong in the disclosure below, not in the headline. */}
+          <p className="mt-2 text-sm text-[var(--color-ink-soft)]">
+            Cheapest of {result.diagnostics.length} source
+            {result.diagnostics.length === 1 ? "" : "s"}, all taxes in
           </p>
         </div>
 
-        <div className="flex items-center gap-1 text-sm">
+        <div className="flex items-center gap-0.5 rounded-full bg-[var(--color-accent-soft)] p-1 text-sm">
           <SortLink href={sortHref("best_price")} active={query.sort === "best_price"}>
             Price
           </SortLink>
@@ -123,26 +111,25 @@ async function Results({
       </div>
 
       {failed.length > 0 && (
-        <p className="mt-4 rounded-[var(--radius-control)] border border-[var(--color-border)] bg-[var(--color-warn-soft)] px-4 py-2.5 text-xs text-[var(--color-warn)]">
-          {failed
-            .map((entry) => `${entry.supplierLabel} did not answer (${entry.status})`)
-            .join("; ")}
-          . Showing what the other suppliers returned.
+        <p className="mt-5 text-xs text-[var(--color-warn)]">
+          {failed.map((entry) => entry.supplierLabel).join(", ")} didn&apos;t respond.
+          Showing everything else.
         </p>
       )}
 
       {result.hotels.length === 0 ? (
-        <div className="card mt-6 p-8 text-center">
+        <div className="mt-16 text-center">
           <p className="text-sm text-[var(--color-ink-soft)]">
-            Nothing available for those dates. Try shifting them by a day or two.
+            Nothing available for those dates. Try shifting them a day or two.
           </p>
         </div>
       ) : (
-        <div className="mt-5 grid gap-3">
-          {result.hotels.map((hotel) => (
+        <div className="mt-7 grid gap-2.5">
+          {result.hotels.map((hotel, index) => (
             <HotelCard
               key={hotel.id}
               hotel={hotel}
+              index={index}
               query={{
                 checkIn: query.checkIn,
                 checkOut: query.checkOut,
@@ -153,6 +140,26 @@ async function Results({
           ))}
         </div>
       )}
+
+      {/* Kept, because being able to see which source answered and how fast is
+          genuinely useful — just not at the top of the page. */}
+      <details className="mt-14 text-xs text-[var(--color-ink-faint)]">
+        <summary className="cursor-pointer select-none hover:text-[var(--color-ink-soft)]">
+          Sources checked
+        </summary>
+        <ul className="mt-3 space-y-1.5">
+          {result.diagnostics.map((entry) => (
+            <li key={entry.supplier} className="flex justify-between gap-4">
+              <span>{entry.supplierLabel}</span>
+              <span className="tabular">
+                {entry.status === "ok"
+                  ? `${entry.hotelsReturned} hotels · ${entry.durationMs}ms`
+                  : entry.status}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </details>
     </>
   );
 }
@@ -169,9 +176,9 @@ function SortLink({
   return (
     <Link
       href={href}
-      className={`rounded-[var(--radius-control)] px-3 py-1.5 ${
+      className={`rounded-full px-3.5 py-1.5 transition-colors ${
         active
-          ? "bg-[var(--color-accent-soft)] font-semibold text-[var(--color-ink)]"
+          ? "bg-[var(--color-surface)] font-medium text-[var(--color-ink)] shadow-[var(--elev-1)]"
           : "text-[var(--color-ink-soft)] hover:text-[var(--color-ink)]"
       }`}
     >
@@ -182,15 +189,15 @@ function SortLink({
 
 function ResultsSkeleton() {
   return (
-    <div className="mt-10 grid gap-3">
+    <div className="mt-[6.5rem] grid gap-2.5">
       {Array.from({ length: 5 }).map((_, index) => (
-        <div key={index} className="card flex overflow-hidden">
-          <div className="skeleton h-40 w-56 shrink-0" />
-          <div className="flex-1 space-y-3 p-5">
-            <div className="skeleton h-4 w-2/5 rounded" />
-            <div className="skeleton h-3 w-3/5 rounded" />
-            <div className="skeleton h-3 w-1/4 rounded" />
+        <div key={index} className="card flex items-center gap-5 p-3">
+          <div className="skeleton h-[132px] w-[176px] shrink-0" />
+          <div className="flex-1 space-y-3">
+            <div className="skeleton h-4 w-2/5" />
+            <div className="skeleton h-3 w-3/5" />
           </div>
+          <div className="skeleton h-7 w-24 shrink-0" />
         </div>
       ))}
     </div>

@@ -6,6 +6,10 @@
 
 [build.environment]
   NODE_VERSION = "22"
+  # Do NOT set NODE_ENV here. Netlify sets it for the runtime itself, and
+  # forcing it to "production" at build time makes npm skip devDependencies —
+  # which silently removes the Prisma CLI, Tailwind and the Next.js plugin and
+  # breaks only the production context, never deploy previews.
   # Prisma's query engine has to be built for the Lambda runtime as well as the
   # build machine, or the deployed functions cannot open a connection.
   PRISMA_CLI_BINARY_TARGETS = "native,rhel-openssl-3.0.x"
@@ -15,9 +19,6 @@
 
 # Settlement is driven by a scheduled function that pokes /api/cron/settle.
 # The schedule lives in netlify/functions/settle-cron.mts next to the code.
-
-[context.production.environment]
-  NODE_ENV = "production"
 
 [[headers]]
   for = "/*"

@@ -21,12 +21,6 @@ const STATUS_COPY: Record<string, { label: string; className: string }> = {
   },
 };
 
-interface ComparisonQuote {
-  label: string;
-  total: number;
-  supplier: string;
-}
-
 export default async function BookingDetailPage({
   params,
 }: {
@@ -51,16 +45,6 @@ export default async function BookingDetailPage({
 
   const awaitingYou =
     mine?.role === "friend" && mine.status === PARTICIPANT_STATUS.PENDING;
-
-  let comparison: ComparisonQuote[] = [];
-  if (booking.priceComparison) {
-    try {
-      const parsed = JSON.parse(booking.priceComparison) as { quotes?: ComparisonQuote[] };
-      comparison = parsed.quotes ?? [];
-    } catch {
-      comparison = [];
-    }
-  }
 
   const collected = booking.participants
     .filter((participant) =>
@@ -180,23 +164,6 @@ export default async function BookingDetailPage({
         )}
       </div>
 
-      {comparison.length > 0 && (
-        <div className="card mt-4 p-6">
-          <h2 className="text-sm font-semibold">Prices at time of booking</h2>
-          <table className="mt-3 w-full text-sm">
-            <tbody>
-              {comparison.map((quote) => (
-                <tr key={quote.supplier} className="border-t border-[var(--color-border)]">
-                  <td className="py-2">{quote.label}</td>
-                  <td className="tabular py-2 text-right">
-                    {formatMoney(quote.total, booking.currency)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
     </div>
   );
 }

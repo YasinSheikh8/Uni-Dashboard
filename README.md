@@ -15,6 +15,11 @@ Three things carry the product:
    instantly. Friends settle up afterwards without the reservation ever waiting
    on them.
 
+Everything happens on the platform. Rooms are sold through our own booking
+engine, and cards are collected in place against a Stripe SetupIntent — there is
+no hand-off to a hosted checkout page and no link out to a supplier's site
+anywhere in the product.
+
 ---
 
 ## Quick start
@@ -131,20 +136,22 @@ on the charge, which reconciles into a real bug.
 Off by default. `SCRAPER_ENABLED=true` plus `SCRAPER_TARGETS=booking,hotels`
 adds public listing prices to the comparison.
 
-**Scraped prices are reference only and can never be booked.** There is no rate
-token behind a number lifted off a search page, so:
+**Scraped prices are an internal signal and are never shown to customers.**
+There is no rate token behind a number lifted off a search page, so:
 
 - the aggregator picks the winner from *bookable* quotes only — a cheaper
   scraped price never becomes the thing you buy;
 - `savedAmount` is computed against bookable sources only, so we never claim a
   saving over something we cannot sell;
-- when a reference price undercuts our bookable rate, the UI says so and links
-  out (`cheaperElsewhere`), rather than hiding it or quietly showing a price
-  that would fail at checkout;
-- a hotel *only* a reference source has renders as a referral row with no
-  Select button;
+- a hotel whose every quote is reference-only is **dropped from results
+  entirely**, because listing it would put a competitor's price and an off-site
+  link in front of the customer;
 - `createBooking` rejects a non-bookable provider outright, so a hand-crafted
   request cannot route around the above.
+
+`cheaperElsewhere` is still computed and the full quote set is still stored on
+the booking, but neither is rendered. They exist for your own pricing
+intelligence — "how often are we beaten, and by how much" — not for the guest.
 
 What the scraper does technically: reads schema.org JSON-LD — the structured
 data sites publish for search engines — rather than pattern-matching rendered
@@ -180,19 +187,40 @@ Three things worth knowing:
    serverless it is wiped on cold start and cannot be shared between concurrent
    lambdas. Set `DATABASE_URL` to a Postgres connection string (Neon and Supabase
    both have free tiers) and `scripts/prepare-db-provider.mjs` rewrites the
-   Prisma datasource at build time, so there is still only one schema file. Run
-   `npx prisma db push` against the production URL once before first deploy.
+   Prisma datasource at build time, so there is still only one schema file. The
+   build runs `prisma db push`, so a fresh database gets its tables on first
+   deploy.
+
+   **Set `DIRECT_URL` too.** Neon and Supabase hand you a *pooled* connection
+   string by default (a `-pooler` host on Neon, port 6543 on Supabase), and
+   PgBouncer cannot run DDL reliably — a schema push against it hangs or
+   half-applies. `DIRECT_URL` should be the unpooled string; the build wires it
+   into the datasource as `directUrl` so migrations go direct while runtime
+   queries stay pooled. The build warns loudly if you set a Postgres
+   `DATABASE_URL` without it.
 2. **Settlement runs as a scheduled function.**
    `netlify/functions/settle-cron.mts` fires hourly and calls
    `POST /api/cron/settle`, guarded by a `CRON_SECRET` bearer token compared in
    constant time. The endpoint refuses to run if the secret is unset. Without
    this schedule, card authorizations expire and the money is uncollectible.
-3. **Set `NEXT_PUBLIC_APP_URL` to the deployed origin**, or the Stripe Checkout
-   return leg will bounce back to localhost.
+3. **Set `NEXT_PUBLIC_APP_URL` to the deployed origin.** It is used for absolute
+   links; the settlement function falls back to it when Netlify's own `URL` is
+   unavailable.
 
-Required environment variables in Netlify: `DATABASE_URL`, `SESSION_SECRET`,
-`CRON_SECRET`, `NEXT_PUBLIC_APP_URL`, plus whichever supplier and Stripe keys
-you are using.
+Do not set `NODE_ENV` in `netlify.toml`. Forcing it to `production` makes npm
+skip devDependencies, which removes the build toolchain and breaks the
+production context while leaving deploy previews green.
+
+Required environment variables in Netlify: `DATABASE_URL`, `DIRECT_URL`,
+`SESSION_SECRET`, `CRON_SECRET`, `NEXT_PUBLIC_APP_URL`, plus whichever supplier
+and Stripe keys you are using.
+
+You do not have to remember that list. `npm run build` starts with a preflight
+(`npm run preflight` to run it alone) that prints exactly which variables are
+set, warns about the ones that degrade behaviour, and stops the build with a
+plain-English explanation when a genuinely required one is missing. It exists
+because the raw failures were unreadable — a missing `DATABASE_URL` used to
+surface as a Prisma wasm dump forty lines into the log.
 
 ---
 

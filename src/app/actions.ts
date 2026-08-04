@@ -124,12 +124,11 @@ export async function saveProfile(
 }
 
 /**
- * Saves a card for off-session use.
+ * Attaches the stub gateway's test card, for environments with no Stripe key.
  *
- * With Stripe configured this hands off to a hosted Checkout session in setup
- * mode — no card data ever touches this app. Without Stripe it attaches the
- * stub gateway's test card so the booking and split flows stay walkable in
- * development.
+ * Real cards are collected in place by `AddCardForm` against a SetupIntent —
+ * there is deliberately no redirect to a hosted checkout page anywhere in this
+ * app. The user never leaves Hotelbook to pay.
  */
 export async function addCard(
   _previous: ActionState,
@@ -154,10 +153,7 @@ export async function addCard(
   }
 
   if (isStripeConfigured()) {
-    // Real cards go through Stripe's hosted setup flow.
-    const { createCheckoutSetupSession } = await import("@/lib/stripe-checkout");
-    const url = await createCheckoutSetupSession(customerId);
-    redirect(url);
+    return { error: "Use the card form above to add a real card" };
   }
 
   const [card] = await gateway.listCards(customerId);

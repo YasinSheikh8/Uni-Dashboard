@@ -182,7 +182,7 @@ export function BookingPanel({
                 <div className="flex gap-2">
                   <input
                     type="email"
-                    className="input"
+                    className="input input-boxed"
                     placeholder="friend@example.com"
                     value={inviteEmail}
                     onChange={(event) => setInviteEmail(event.target.value)}
