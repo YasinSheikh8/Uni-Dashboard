@@ -55,6 +55,7 @@ interface AmadeusOffer {
 interface AmadeusHotelOffers {
   hotel?: {
     hotelId?: string;
+    chainCode?: string;
     name?: string;
     cityCode?: string;
     latitude?: number;
@@ -250,6 +251,7 @@ export class AmadeusProvider implements RateProvider {
           country: hotelInfo.address?.countryCode ?? query.countryCode ?? "",
           latitude: hotelInfo.latitude,
           longitude: hotelInfo.longitude,
+          chainCode: hotelInfo.chainCode,
           starRating: hotelInfo.rating ? Number.parseInt(hotelInfo.rating, 10) : undefined,
           // Amadeus Self-Service does not return photography.
           imageUrl: undefined,

@@ -38,7 +38,7 @@ export interface PaymentIntentSummary {
 
 export interface PaymentGateway {
   readonly isLive: boolean;
-  ensureCustomer(userId: string, email: string, name: string, existingId: string | null): Promise<string>;
+  ensureCustomer(userId: string, email: string | null, name: string, existingId: string | null): Promise<string>;
   createSetupIntent(customerId: string): Promise<{ clientSecret: string }>;
   listCards(customerId: string): Promise<Array<{ id: string; brand: string; last4: string; expMonth: number; expYear: number }>>;
   /** Places a hold. Money is reserved, not taken. */
@@ -61,13 +61,14 @@ class StripeGateway implements PaymentGateway {
 
   async ensureCustomer(
     userId: string,
-    email: string,
+    email: string | null,
     name: string,
     existingId: string | null,
   ): Promise<string> {
     if (existingId) return existingId;
+    // Stripe treats email as optional; a phone-only customer simply has none.
     const customer = await this.stripe.customers.create({
-      email,
+      ...(email ? { email } : {}),
       name,
       metadata: { appUserId: userId },
     });
@@ -158,7 +159,7 @@ class StubGateway implements PaymentGateway {
   private intents = new Map<string, PaymentIntentSummary>();
   private counter = 0;
 
-  async ensureCustomer(userId: string, _email: string, _name: string, existingId: string | null) {
+  async ensureCustomer(userId: string, _email: string | null, _name: string, existingId: string | null) {
     return existingId ?? `cus_stub_${userId.slice(0, 12)}`;
   }
 

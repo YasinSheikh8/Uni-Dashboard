@@ -8,7 +8,7 @@ import { loadStripe, type Stripe, type StripeElements } from "@stripe/stripe-js"
  *
  * Stripe's Payment Element is mounted directly into this page — the card is
  * tokenized inside Stripe's iframe so no card data reaches our server, but the
- * user never leaves Hotelbook. `redirect: "if_required"` keeps confirmation
+ * user never leaves BKR. `redirect: "if_required"` keeps confirmation
  * on-page; a 3-D Secure challenge, when the bank demands one, appears as a
  * modal over the page rather than a navigation.
  *
@@ -193,7 +193,7 @@ export function AddCardForm({ onSaved }: { onSaved: () => void }) {
 
       <p className="mt-3 text-xs text-[var(--color-ink-faint)]">
         Handled by Stripe. Card details never reach our servers, and you stay on
-        Hotelbook the whole time.
+        BKR the whole time.
       </p>
     </form>
   );

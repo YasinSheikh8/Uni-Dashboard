@@ -1,4 +1,4 @@
-# Hotelbook
+# BKR
 
 Hotel booking that prices every supplier at once, books in a single tap, and
 splits the bill with whoever is coming.
@@ -128,6 +128,83 @@ Split arithmetic uses largest-remainder allocation, so shares are always
 integers that sum to exactly the total. Naive rounding leaves you a cent short
 on the charge, which reconciles into a real bug.
 
+
+---
+
+## Signing in
+
+Four ways in, one account, one screen:
+
+| Method | Needs |
+|---|---|
+| Google | `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET` |
+| Apple | `APPLE_CLIENT_ID`, `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY` (paid Apple Developer account) |
+| Phone | `TWILIO_*` — works without it in development, printing the code to the server log |
+| Email + password | nothing |
+
+Built on Auth.js so OAuth state, PKCE and nonce handling are not hand-rolled.
+Sessions are JWT, because the phone and password routes are credentials-based
+and the database-session strategy does not support those. Provider buttons only
+render when that provider is fully configured, so a half-set provider never
+shows a button that dies at the redirect — and the preflight warns when one is
+partially set.
+
+Details worth knowing:
+
+- **There is no separate sign-up page.** Google, Apple and phone create the
+  account on first use. `/signup` redirects to `/signin`.
+- **Apple's client secret is generated at runtime** from the `.p8` key rather
+  than pasted in as a pre-made token. Apple's secrets expire after six months,
+  and the usual failure is discovering that months later when sign-in breaks.
+- **Accounts may have no email.** Phone sign-in and Apple's "hide my email" both
+  produce one. That is why `User.email` and `BookingParticipant.email` are
+  nullable and participants are matched on `userId` first
+  (`src/lib/participants.ts`). Suppliers still need somewhere to send the
+  confirmation, so the traveler profile asks for a contact address — and only
+  asks when the account itself has none.
+- **Phone codes are hashed at rest**, single-use, 5-minute expiry, 5 attempts,
+  rate limited per number, and compared in constant time. Requesting a new code
+  invalidates the previous one so the guessing surface cannot be widened.
+
+---
+
+## Setup wizard
+
+New accounts land on `/setup`, which asks one thing per screen rather than
+presenting a wall of fields.
+
+Two rules shape it:
+
+- **Never ask what we already know.** The step list is derived from the account
+  (`src/lib/onboarding.ts`), so a Google user is not asked their name, a phone
+  user is not asked their number, and only an account with no email is asked for
+  a confirmation address.
+- **Never trap anyone.** Each step commits on its own, so leaving halfway loses
+  nothing and returning resumes in place. Optional steps say so.
+
+One subtlety worth knowing if you touch it: the step list is **frozen on mount**.
+It is derived from the same account data the steps write to, so letting it update
+live meant saving your name removed the name step, shrank the list, and slid the
+index onto the wrong question — answering "what's your name?" skipped straight
+past "your phone number".
+
+---
+
+## Hotel rewards
+
+Guests can store loyalty memberships (`src/lib/loyalty.ts` has the programme
+catalogue). At booking time the hotel is matched to a programme — by supplier
+chain code where available, otherwise by brand tokens in the hotel name — and
+the matching membership number is attached to the reservation.
+
+**What this does not do is earn points.** Chains generally exclude rates booked
+through third parties from their loyalty programmes, so promising points or
+guaranteed upgrades would be false. What it does do is put the membership and
+tier in front of the property, which is where discretionary upgrades and late
+check-out actually get decided. The UI says exactly this rather than implying
+otherwise.
+
+Membership numbers are format-validated per programme before being stored.
 
 ---
 

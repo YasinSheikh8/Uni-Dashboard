@@ -63,6 +63,24 @@ const RECOMMENDED = [
 
 const SUPPLIERS = ["LITEAPI_KEY", "AMADEUS_CLIENT_ID", "AMADEUS_CLIENT_SECRET"];
 
+/**
+ * Sign-in providers. None is required — the app always offers email/password,
+ * and phone sign-in works without Twilio by printing the code to the server log
+ * in development. Each is reported so it is obvious which buttons users will
+ * actually see.
+ */
+const SIGN_IN_METHODS = [
+  { label: "Google sign-in", vars: ["AUTH_GOOGLE_ID", "AUTH_GOOGLE_SECRET"] },
+  {
+    label: "Apple sign-in",
+    vars: ["APPLE_CLIENT_ID", "APPLE_TEAM_ID", "APPLE_KEY_ID", "APPLE_PRIVATE_KEY"],
+  },
+  {
+    label: "Phone sign-in SMS",
+    vars: ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_FROM_NUMBER"],
+  },
+];
+
 const set = (name) => Boolean(process.env[name]?.trim());
 
 const databaseUrl = process.env.DATABASE_URL?.trim() ?? "";
@@ -107,7 +125,7 @@ function isPooled(url) {
 }
 
 const line = "─".repeat(64);
-console.log(`\n${line}\n Hotelbook build preflight\n${line}`);
+console.log(`\n${line}\n BKR build preflight\n${line}`);
 
 /**
  * Conditional failures — configuration that is present but cannot work.
@@ -158,6 +176,12 @@ console.log(
   ` ${supplierCount > 0 ? "✓" : "·"} supplier credentials ` +
     `(${supplierCount}/${SUPPLIERS.length} set)`,
 );
+
+for (const method of SIGN_IN_METHODS) {
+  const have = method.vars.filter(set).length;
+  const mark = have === method.vars.length ? "✓" : have === 0 ? "·" : "!";
+  console.log(` ${mark} ${method.label} (${have}/${method.vars.length})`);
+}
 console.log(line);
 
 // --- Warnings: things that build fine but behave in a reduced way ----------
@@ -168,6 +192,18 @@ for (const entry of RECOMMENDED) {
   // Skip anything already reported as a hard failure below.
   if (conditionalFailures.some((failure) => failure.name === entry.name)) continue;
   if (!set(entry.name)) warnings.push(`${entry.name} — ${entry.why}\n   ${entry.fix}`);
+}
+
+// A half-configured provider is worse than none: the button appears in some
+// code paths and then fails at the redirect.
+for (const method of SIGN_IN_METHODS) {
+  const missing = method.vars.filter((name) => !set(name));
+  if (missing.length > 0 && missing.length < method.vars.length) {
+    warnings.push(
+      `${method.label} is partially configured — missing ${missing.join(", ")}.\n` +
+        "   Set all of them, or none, so the option is either offered or hidden.",
+    );
+  }
 }
 
 if (supplierCount === 0) {

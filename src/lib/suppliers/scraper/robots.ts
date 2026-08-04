@@ -22,7 +22,7 @@ const cache = new Map<string, { rules: RobotsRules | null; fetchedAt: number }>(
 
 export const USER_AGENT =
   process.env.SCRAPER_USER_AGENT ??
-  "HotelbookBot/0.1 (+https://hotelbook.example/bot)";
+  "BKRBot/0.1 (+https://bkr.example/bot)";
 
 /** Parses the record group that applies to us, falling back to the `*` group. */
 export function parseRobots(body: string, userAgent: string): RobotsRules {

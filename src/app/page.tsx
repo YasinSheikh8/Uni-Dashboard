@@ -39,7 +39,7 @@ export default async function HomePage() {
             <span className="text-[var(--color-ink-soft)]">
               One-tap booking needs your details and a card.
             </span>
-            <Link href="/account" className="font-medium underline underline-offset-4">
+            <Link href="/setup" className="font-medium underline underline-offset-4">
               Finish setup
             </Link>
           </div>

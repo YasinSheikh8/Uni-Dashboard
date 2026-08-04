@@ -1,9 +1,11 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { useRouter } from "next/navigation";
 import { addCard, addFriend, saveProfile, type ActionState } from "@/app/actions";
 import { AddCardForm } from "./AddCardForm";
+import { LOYALTY_PROGRAMS } from "@/lib/loyalty";
+import { addLoyaltyMembership, removeLoyaltyMembership } from "@/app/actions";
 
 function Message({ state }: { state: ActionState }) {
   if (state.error) {
@@ -25,11 +27,14 @@ function Message({ state }: { state: ActionState }) {
 
 export function ProfileForm({
   profile,
+  accountEmail,
 }: {
+  accountEmail: string | null;
   profile: {
     firstName: string;
     lastName: string;
     phone: string;
+    contactEmail: string | null;
     nationality: string | null;
     addressLine1: string | null;
     addressCity: string | null;
@@ -50,6 +55,18 @@ export function ProfileForm({
         <Field name="firstName" label="First name" defaultValue={profile?.firstName} required />
         <Field name="lastName" label="Last name" defaultValue={profile?.lastName} required />
         <Field name="phone" label="Phone" defaultValue={profile?.phone} required />
+        {/* Only asked for when the account itself has no address — a phone
+            sign-in, or Apple's hide-my-email. The hotel needs somewhere to
+            send the confirmation. */}
+        {!accountEmail && (
+          <Field
+            name="contactEmail"
+            label="Email for confirmations"
+            defaultValue={profile?.contactEmail}
+            placeholder="you@example.com"
+            required
+          />
+        )}
         <Field name="nationality" label="Nationality" defaultValue={profile?.nationality} placeholder="GB" />
         <Field name="addressLine1" label="Address" defaultValue={profile?.addressLine1} />
         <Field name="addressCity" label="City" defaultValue={profile?.addressCity} />
@@ -158,7 +175,7 @@ export function CardSection({
 export function FriendsSection({
   friends,
 }: {
-  friends: Array<{ id: string; name: string; email: string; avatarColor: string }>;
+  friends: Array<{ id: string; name: string; email: string | null; avatarColor: string }>;
 }) {
   const [state, formAction, pending] = useActionState(addFriend, {} as ActionState);
 
@@ -180,7 +197,9 @@ export function FriendsSection({
                 {friend.name.slice(0, 1).toUpperCase()}
               </span>
               <span className="font-medium">{friend.name}</span>
-              <span className="truncate text-[var(--color-ink-faint)]">{friend.email}</span>
+              <span className="truncate text-[var(--color-ink-faint)]">
+                {friend.email ?? "phone account"}
+              </span>
             </li>
           ))}
         </ul>
@@ -200,6 +219,109 @@ export function FriendsSection({
       </form>
 
       <Message state={state} />
+    </div>
+  );
+}
+
+/**
+ * Rewards, for editing after setup.
+ *
+ * Same actions the wizard uses, so there is one code path for adding a
+ * membership rather than two that can drift.
+ */
+export function LoyaltySection({
+  memberships,
+}: {
+  memberships: Array<{ programCode: string; membershipNumber: string; tier: string | null }>;
+}) {
+  const [state, formAction, pending] = useActionState(
+    addLoyaltyMembership,
+    {} as ActionState,
+  );
+  const [selected, setSelected] = useState<string | null>(null);
+
+  const held = new Set(memberships.map((entry) => entry.programCode));
+  const program = LOYALTY_PROGRAMS.find((entry) => entry.code === selected);
+
+  return (
+    <div className="card p-6">
+      <h2 className="text-sm font-semibold">Hotel rewards</h2>
+      <p className="mt-1 text-sm text-[var(--color-ink-soft)]">
+        Added to the reservation so the property recognises you at check-in.
+      </p>
+
+      {memberships.length > 0 && (
+        <ul className="mt-4 space-y-2">
+          {memberships.map((entry) => {
+            const meta = LOYALTY_PROGRAMS.find((p) => p.code === entry.programCode);
+            return (
+              <li
+                key={entry.programCode}
+                className="flex items-center justify-between rounded-[var(--radius-control)] bg-[var(--color-surface-sunken)] px-4 py-3 text-sm"
+              >
+                <span>
+                  <span className="font-medium">{meta?.name ?? entry.programCode}</span>
+                  <span className="ml-2 text-[var(--color-ink-faint)]">
+                    ····{entry.membershipNumber.slice(-4)}
+                  </span>
+                  {entry.tier && (
+                    <span className="pill pill-save ml-2">{entry.tier}</span>
+                  )}
+                </span>
+                <form action={removeLoyaltyMembership}>
+                  <input type="hidden" name="programCode" value={entry.programCode} />
+                  <button className="text-xs text-[var(--color-ink-faint)] hover:text-[var(--color-danger)]">
+                    Remove
+                  </button>
+                </form>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        {LOYALTY_PROGRAMS.filter((entry) => !held.has(entry.code)).map((entry) => (
+          <button
+            key={entry.code}
+            type="button"
+            onClick={() => setSelected(selected === entry.code ? null : entry.code)}
+            className={`pill cursor-pointer ${
+              selected === entry.code ? "pill-save" : "pill-muted"
+            }`}
+          >
+            {entry.name}
+          </button>
+        ))}
+      </div>
+
+      {program && (
+        <form action={formAction} className="mt-4">
+          <input type="hidden" name="programCode" value={program.code} />
+          <input
+            name="membershipNumber"
+            className="input input-boxed"
+            placeholder={`Membership number — ${program.numberHint}`}
+            required
+          />
+          <input
+            name="tier"
+            className="input input-boxed mt-2"
+            placeholder="Tier, e.g. Gold (optional)"
+          />
+          <button type="submit" className="btn btn-secondary mt-3" disabled={pending}>
+            {pending ? "Adding…" : `Add ${program.name}`}
+          </button>
+        </form>
+      )}
+
+      <Message state={state} />
+
+      <p className="mt-4 text-xs leading-relaxed text-[var(--color-ink-faint)]">
+        Most chains don&apos;t award points on third-party rates, so we don&apos;t
+        promise them. Your number still reaches the property, which is where
+        upgrades get decided.
+      </p>
     </div>
   );
 }

@@ -13,6 +13,7 @@ const offerSchema = z.object({
   hotelCountry: z.string(),
   hotelImageUrl: z.string().optional(),
   hotelRating: z.number().optional(),
+  chainCode: z.string().optional(),
   roomName: z.string(),
   checkIn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   checkOut: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -60,8 +61,9 @@ export async function POST(request: Request) {
       );
     }
 
-    // Deduplicate and drop the organizer if they invited themselves.
-    const seen = new Set<string>([user.email.toLowerCase()]);
+    // Deduplicate and drop the organizer if they invited themselves. An
+    // organizer with no email cannot collide with an invited address.
+    const seen = new Set<string>(user.email ? [user.email.toLowerCase()] : []);
     const uniqueFriends = friends.filter((friend) => {
       const email = friend.email.toLowerCase();
       if (seen.has(email)) return false;

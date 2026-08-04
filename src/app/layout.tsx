@@ -4,7 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Hotelbook — one room, one tap, split however you like",
+  title: "BKR — one room, one tap, split however you like",
   description:
     "Every supplier priced at once, the cheaper one surfaced, one-tap booking and payment splitting built in.",
 };
@@ -37,7 +37,7 @@ async function Header() {
           >
             <span className="h-[7px] w-[7px] rounded-[2px] bg-white/90" />
           </span>
-          Hotelbook
+          BKR
         </Link>
 
         <nav className="flex items-center gap-1">

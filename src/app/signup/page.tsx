@@ -1,19 +1,15 @@
 import { redirect } from "next/navigation";
-import { AuthForm } from "@/components/AuthForm";
-import { signUp } from "@/app/actions";
-import { getCurrentUserId } from "@/lib/auth";
 
+/**
+ * There is no separate sign-up. Google, Apple and phone all create the account
+ * on first use, and the email form has its own toggle — so a second door would
+ * only be a place to get stuck. Old links still work.
+ */
 export default async function SignUpPage({
   searchParams,
 }: {
   searchParams: Promise<{ next?: string }>;
 }) {
-  if (await getCurrentUserId()) redirect("/");
   const { next } = await searchParams;
-
-  return (
-    <div className="mx-auto max-w-md px-5 py-16">
-      <AuthForm mode="signup" action={signUp} next={next} />
-    </div>
-  );
+  redirect(next ? `/signin?next=${encodeURIComponent(next)}` : "/signin");
 }

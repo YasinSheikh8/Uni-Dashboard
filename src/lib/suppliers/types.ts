@@ -37,6 +37,8 @@ export interface HotelIdentity {
   country: string;
   latitude?: number;
   longitude?: number;
+  /** Supplier chain code, when reported. Used to match loyalty programmes. */
+  chainCode?: string;
   /** 1-5 stars, as published by the supplier. */
   starRating?: number;
   /** 0-10 guest review score. */
@@ -90,6 +92,12 @@ export interface BookingRequest {
     phone: string;
   };
   guests: Array<{ firstName: string; lastName: string }>;
+  /**
+   * Chain loyalty membership, when the guest has one for this hotel's chain.
+   * Suppliers vary in whether they forward it; see src/lib/loyalty.ts for why
+   * this is worth sending even so.
+   */
+  loyalty?: { programCode: string; membershipNumber: string };
   /** Our own booking id, passed through for reconciliation. */
   clientReference: string;
 }
@@ -144,6 +152,7 @@ export interface AggregatedHotel {
   country: string;
   latitude?: number;
   longitude?: number;
+  chainCode?: string;
   starRating?: number;
   reviewScore?: number;
   reviewCount?: number;

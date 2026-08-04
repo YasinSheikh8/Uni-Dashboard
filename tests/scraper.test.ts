@@ -47,7 +47,7 @@ afterEach(() => {
 
 describe("parseRobots", () => {
   it("picks the wildcard group when no specific agent matches", () => {
-    const rules = parseRobots(ROBOTS, "HotelbookBot/0.1");
+    const rules = parseRobots(ROBOTS, "BKRBot/0.1");
     assert.deepEqual(rules.disallow, ["/admin", "/searchresults.html"]);
     assert.equal(rules.crawlDelayMs, 2000);
   });
@@ -59,7 +59,7 @@ describe("parseRobots", () => {
 });
 
 describe("isAllowed", () => {
-  const rules = parseRobots(ROBOTS, "HotelbookBot/0.1");
+  const rules = parseRobots(ROBOTS, "BKRBot/0.1");
 
   it("blocks a disallowed path", () => {
     assert.equal(isAllowed(rules, "/searchresults.html?ss=Lisbon"), false);

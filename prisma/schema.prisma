@@ -7,7 +7,7 @@
 // All money is stored in minor units (cents) as Int. Never floats.
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
   // "native" builds for the machine running `prisma generate`;
   // rhel-openssl-3.0.x is what Netlify/Vercel lambdas actually run on.
   binaryTargets = ["native", "rhel-openssl-3.0.x"]
@@ -19,18 +19,40 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  passwordHash String
-  name         String
-  avatarColor  String   @default("#1f6feb")
-  createdAt    DateTime @default(now())
+  id String @id @default(cuid())
+
+  /// Optional: someone who signs in with Apple's "hide my email" or with a
+  /// phone number may never give us a real address.
+  email         String?   @unique
+  emailVerified DateTime?
+
+  /// Optional: OAuth and phone users have no password at all.
+  passwordHash String?
+
+  /// E.164, e.g. +447700900123. Unique so a number maps to one account.
+  phone         String?   @unique
+  phoneVerified DateTime?
+
+  name        String
+  image       String?
+  avatarColor String   @default("#1f6feb")
+  createdAt   DateTime @default(now())
 
   // Stripe customer, created lazily the first time a card is saved.
   stripeCustomerId String? @unique
 
-  profile        TravelerProfile?
-  paymentMethods PaymentMethod[]
+  /// Linked Google/Apple identities.
+  accounts Account[]
+  sessions Session[]
+
+  /// How far through the setup wizard they are. Lets us drop someone back
+  /// where they left off instead of restarting the whole flow.
+  onboardingStep String    @default("name")
+  onboardedAt    DateTime?
+
+  profile            TravelerProfile?
+  paymentMethods     PaymentMethod[]
+  loyaltyMemberships LoyaltyMembership[]
 
   organizedBookings Booking[]            @relation("BookingOrganizer")
   participations    BookingParticipant[]
@@ -52,9 +74,16 @@ model TravelerProfile {
   dateOfBirth DateTime?
   nationality String?
 
-  addressLine1 String?
-  addressCity  String?
-  addressZip   String?
+  /// Where the hotel sends the confirmation.
+  ///
+  /// Only needed when the ACCOUNT has no email — a phone sign-in, or Apple's
+  /// "hide my email". Suppliers require a contact address on the reservation,
+  /// so this is what makes those accounts bookable rather than blocked.
+  contactEmail String?
+
+  addressLine1   String?
+  addressCity    String?
+  addressZip     String?
   addressCountry String?
 
   updatedAt DateTime @updatedAt
@@ -65,12 +94,12 @@ model PaymentMethod {
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  stripePaymentMethodId String  @unique
+  stripePaymentMethodId String   @unique
   brand                 String
   last4                 String
   expMonth              Int
   expYear               Int
-  isDefault             Boolean @default(false)
+  isDefault             Boolean  @default(false)
   createdAt             DateTime @default(now())
 
   @@index([userId])
@@ -103,9 +132,9 @@ model Booking {
   status String @default("pending_payment")
 
   // ---- What was booked -------------------------------------------------
-  supplier        String // liteapi | amadeus | fixture
-  supplierHotelId String
-  supplierRateId  String
+  supplier           String // liteapi | amadeus | fixture
+  supplierHotelId    String
+  supplierRateId     String
   supplierBookingRef String?
   confirmationCode   String?
 
@@ -121,7 +150,7 @@ model Booking {
   checkOut DateTime
   nights   Int
   guests   Int
-  rooms    Int @default(1)
+  rooms    Int      @default(1)
 
   // ---- Money (minor units) ---------------------------------------------
   currency    String
@@ -133,6 +162,12 @@ model Booking {
 
   /// Amount the cheapest rejected competing quote came in at, if any.
   savedAmount Int?
+
+  /// Loyalty membership attached to this reservation, when the guest had one
+  /// matching the hotel's chain. Recorded on our side regardless of whether the
+  /// supplier forwards it, so the guest can quote it at check-in.
+  loyaltyProgramCode String?
+  loyaltyNumber      String?
 
   // ---- Hybrid split settlement ----------------------------------------
   /// Organizer's backstop authorization covering all friends' shares. This is
@@ -163,7 +198,12 @@ model BookingParticipant {
   userId String?
   user   User?   @relation(fields: [userId], references: [id])
 
-  email String
+  /// Null for participants who have no email at all — someone who signed in
+  /// with a phone number, or with Apple's "hide my email". Such a participant
+  /// is identified by userId instead. The unique constraint below still stops
+  /// the same address being invited twice; Postgres does not treat NULLs as
+  /// equal, so several email-less participants can coexist on one booking.
+  email String?
   name  String?
 
   /// organizer | friend
@@ -176,8 +216,97 @@ model BookingParticipant {
 
   stripePaymentIntentId String?
   respondedAt           DateTime?
-  createdAt             DateTime @default(now())
+  createdAt             DateTime  @default(now())
 
   @@unique([bookingId, email])
+  @@index([userId])
+}
+
+// ---------------------------------------------------------------------------
+// Auth.js
+//
+// Standard adapter models. Sessions use the JWT strategy (required for the
+// credentials-based password and phone flows), so the Session table is mostly
+// vestigial — it stays because the adapter interface expects it and because
+// switching to database sessions later should not need a migration.
+// ---------------------------------------------------------------------------
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+/// One-time codes for phone sign-in.
+///
+/// The code is stored as a hash, never in plaintext — a leaked database should
+/// not hand over live sign-in codes. `attempts` caps brute force against a
+/// six-digit space, and rows are single-use: consumed on success, deleted on
+/// expiry sweep.
+model PhoneOtp {
+  id        String   @id @default(cuid())
+  phone     String
+  codeHash  String
+  expiresAt DateTime
+  attempts  Int      @default(0)
+  consumed  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([phone])
+  @@index([expiresAt])
+}
+
+/// A guest's hotel loyalty programme membership.
+///
+/// Stored so the number can be attached to reservations. Note that chains
+/// generally do NOT credit points for third-party bookings — see
+/// src/lib/loyalty.ts. The value here is that the property sees the membership
+/// at check-in, which is where discretionary upgrades actually happen.
+model LoyaltyMembership {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Matches a code in LOYALTY_PROGRAMS.
+  programCode      String
+  membershipNumber String
+  /// Free text, e.g. "Gold", "Platinum". Purely informational.
+  tier             String?
+  createdAt        DateTime @default(now())
+
+  @@unique([userId, programCode])
   @@index([userId])
 }

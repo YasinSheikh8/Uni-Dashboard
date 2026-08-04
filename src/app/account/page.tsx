@@ -1,5 +1,10 @@
 import { redirect } from "next/navigation";
-import { CardSection, FriendsSection, ProfileForm } from "@/components/AccountForms";
+import {
+  CardSection,
+  FriendsSection,
+  LoyaltySection,
+  ProfileForm,
+} from "@/components/AccountForms";
 import { signOut } from "@/app/actions";
 import { getCurrentUser, isInstantBookReady } from "@/lib/auth";
 import { prisma } from "@/lib/db";
@@ -26,6 +31,12 @@ export default async function AccountPage() {
     friendship.requesterId === user.id ? friendship.addressee : friendship.requester,
   );
 
+  const memberships = await prisma.loyaltyMembership.findMany({
+    where: { userId: user.id },
+    orderBy: { createdAt: "asc" },
+    select: { programCode: true, membershipNumber: true, tier: true },
+  });
+
   const ready = isInstantBookReady(user);
 
   return (
@@ -33,7 +44,9 @@ export default async function AccountPage() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-[-0.02em]">Account</h1>
-          <p className="mt-1 text-sm text-[var(--color-ink-soft)]">{user.email}</p>
+          <p className="mt-1 text-sm text-[var(--color-ink-soft)]">
+            {user.email ?? user.phone ?? "Signed in"}
+          </p>
         </div>
         <form action={signOut}>
           <button type="submit" className="btn btn-ghost text-sm">
@@ -51,11 +64,11 @@ export default async function AccountPage() {
       >
         {ready
           ? "One-tap booking is on. Pick a room and you're done."
-          : "Add your traveler details and a card to unlock one-tap booking."}
+          : "A few things are still missing for one-tap booking."}
       </div>
 
       <div className="mt-6 space-y-4">
-        <ProfileForm profile={user.profile} />
+        <ProfileForm profile={user.profile} accountEmail={user.email} />
         <CardSection
           cards={user.paymentMethods.map((method) => ({
             id: method.id,
@@ -66,6 +79,7 @@ export default async function AccountPage() {
           }))}
           stripeLive={isStripeConfigured()}
         />
+        <LoyaltySection memberships={memberships} />
         <FriendsSection friends={friends} />
       </div>
     </div>
