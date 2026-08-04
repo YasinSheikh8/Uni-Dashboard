@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "node scripts/prepare-db-provider.mjs && prisma generate && prisma db push --skip-generate && next build",
+    "build": "node scripts/preflight.mjs && node scripts/prepare-db-provider.mjs && prisma generate && node scripts/db-push.mjs && next build",
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
@@ -13,7 +13,8 @@
     "db:studio": "prisma studio",
     "settle": "node --env-file=.env --import tsx --conditions=react-server scripts/settle.ts",
     "test": "node --import tsx --test tests/*.test.ts",
-    "e2e": "node --env-file=.env --import tsx --conditions=react-server scripts/e2e-split.ts"
+    "e2e": "node --env-file=.env --import tsx --conditions=react-server scripts/e2e-split.ts",
+    "preflight": "node scripts/preflight.mjs"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

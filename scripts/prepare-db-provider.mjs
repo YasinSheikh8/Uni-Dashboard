@@ -21,6 +21,9 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { loadEnv } from "./load-env.mjs";
+
+loadEnv();
 
 const here = dirname(fileURLToPath(import.meta.url));
 const schemaPath = join(here, "..", "prisma", "schema.prisma");

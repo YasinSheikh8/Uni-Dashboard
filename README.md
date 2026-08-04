@@ -215,6 +215,13 @@ Required environment variables in Netlify: `DATABASE_URL`, `DIRECT_URL`,
 `SESSION_SECRET`, `CRON_SECRET`, `NEXT_PUBLIC_APP_URL`, plus whichever supplier
 and Stripe keys you are using.
 
+You do not have to remember that list. `npm run build` starts with a preflight
+(`npm run preflight` to run it alone) that prints exactly which variables are
+set, warns about the ones that degrade behaviour, and stops the build with a
+plain-English explanation when a genuinely required one is missing. It exists
+because the raw failures were unreadable — a missing `DATABASE_URL` used to
+surface as a Prisma wasm dump forty lines into the log.
+
 ---
 
 ## Layout
