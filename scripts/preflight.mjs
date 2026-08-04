@@ -64,12 +64,78 @@ const RECOMMENDED = [
 const SUPPLIERS = ["LITEAPI_KEY", "AMADEUS_CLIENT_ID", "AMADEUS_CLIENT_SECRET"];
 
 const set = (name) => Boolean(process.env[name]?.trim());
-const isPostgres = /^postgres(ql)?:\/\//i.test(process.env.DATABASE_URL ?? "");
+
+const databaseUrl = process.env.DATABASE_URL?.trim() ?? "";
+const isPostgres = /^postgres(ql)?:\/\//i.test(databaseUrl);
+const isSqlite = /^file:/i.test(databaseUrl);
+
+/** True when we are building for a deployed environment rather than a laptop. */
+const isDeployBuild =
+  process.env.NETLIFY === "true" ||
+  process.env.VERCEL === "1" ||
+  process.env.CI === "true";
+
+/**
+ * Detects a connection string that goes through a connection pooler.
+ *
+ * Neon and Supabase both hand you the pooled string BY DEFAULT, so this is the
+ * likely thing to paste. PgBouncer cannot run DDL reliably, so a schema push
+ * against it hangs or half-applies — a failure that surfaces much later and
+ * much less legibly than this check does.
+ */
+function isPooled(url) {
+  if (!url) return false;
+  try {
+    const parsed = new URL(url);
+    return (
+      parsed.hostname.includes("-pooler") ||        // Neon
+      parsed.hostname.includes("pooler.supabase") || // Supabase
+      parsed.port === "6543" ||                      // Supabase transaction pooler
+      /pgbouncer=true/i.test(parsed.search)
+    );
+  } catch {
+    return false;
+  }
+}
 
 const line = "─".repeat(64);
 console.log(`\n${line}\n Hotelbook build preflight\n${line}`);
 
-const missingRequired = REQUIRED.filter((entry) => !set(entry.name));
+/**
+ * Conditional failures — configuration that is present but cannot work.
+ * These are worth stopping for because each one fails LATER and less clearly.
+ */
+const conditionalFailures = [];
+
+if (isPostgres && isPooled(databaseUrl) && !set("DIRECT_URL")) {
+  conditionalFailures.push({
+    name: "DIRECT_URL",
+    why:
+      "DATABASE_URL points at a POOLED endpoint, and connection poolers cannot run " +
+      "the schema changes this build applies. The push would hang or half-apply.",
+    fix:
+      "Set DIRECT_URL to the UNPOOLED connection string. On Neon it is the same " +
+      "string with '-pooler' removed from the host; on Supabase it is port 5432 " +
+      "rather than 6543. Keep DATABASE_URL pooled — runtime queries want it.",
+  });
+}
+
+if (isSqlite && isDeployBuild) {
+  conditionalFailures.push({
+    name: "DATABASE_URL",
+    why:
+      "DATABASE_URL is a SQLite file, which cannot work on a deployed serverless " +
+      "platform: the filesystem is wiped on cold start and is not shared between " +
+      "concurrent function instances. The build would succeed and the site would " +
+      "lose every booking.",
+    fix: "Use a Postgres connection string. Neon and Supabase both have free tiers.",
+  });
+}
+
+const missingRequired = [
+  ...REQUIRED.filter((entry) => !set(entry.name)),
+  ...conditionalFailures,
+];
 for (const entry of REQUIRED) {
   console.log(` ${set(entry.name) ? "✓" : "✗"} ${entry.name}`);
 }
@@ -91,6 +157,8 @@ const warnings = [];
 
 for (const entry of RECOMMENDED) {
   if (entry.onlyIfPostgres && !isPostgres) continue;
+  // Skip anything already reported as a hard failure below.
+  if (conditionalFailures.some((failure) => failure.name === entry.name)) continue;
   if (!set(entry.name)) warnings.push(`${entry.name} — ${entry.why}\n   ${entry.fix}`);
 }
 
@@ -108,7 +176,9 @@ if (warnings.length > 0) {
 
 // --- Fatal: a green build here would deploy a broken site -------------------
 if (missingRequired.length > 0) {
-  console.error(`${line}\n BUILD STOPPED — missing required configuration\n${line}\n`);
+  // "missing" would be wrong for values that are present but unusable, such as
+  // a SQLite path on a serverless platform.
+  console.error(`${line}\n BUILD STOPPED — configuration must be fixed first\n${line}\n`);
   for (const entry of missingRequired) {
     console.error(` ✗ ${entry.name}`);
     console.error(`   ${entry.why}`);
