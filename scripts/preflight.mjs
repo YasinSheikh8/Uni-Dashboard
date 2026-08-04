@@ -7,7 +7,7 @@
  * This exists because of how the failures actually looked. A missing
  * DATABASE_URL surfaced as a Prisma wasm validation dump forty lines into the
  * log, and a devDependency prune surfaced as `prisma: not found` — neither of
- * which tells you that the fix is one line in the Netlify environment settings.
+ * which tells you that the fix is one line in the host's environment settings.
  * A deploy that fails should say what to set and where.
  *
  * Fatal checks are the ones where a green build produces a broken site: without
@@ -71,9 +71,17 @@ const isSqlite = /^file:/i.test(databaseUrl);
 
 /** True when we are building for a deployed environment rather than a laptop. */
 const isDeployBuild =
-  process.env.NETLIFY === "true" ||
   process.env.VERCEL === "1" ||
+  process.env.NETLIFY === "true" ||
   process.env.CI === "true";
+
+/** Point people at the right settings screen for wherever they are building. */
+const whereToSetThem =
+  process.env.VERCEL === "1"
+    ? " On Vercel these go in: Project → Settings → Environment Variables."
+    : process.env.NETLIFY === "true"
+      ? " On Netlify these go in: Site configuration → Environment variables."
+      : " Set them in your host's environment settings.";
 
 /**
  * Detects a connection string that goes through a connection pooler.
@@ -185,7 +193,7 @@ if (missingRequired.length > 0) {
     console.error(`   → ${entry.fix}\n`);
   }
   console.error(
-    " On Netlify these go in: Site configuration → Environment variables.\n" +
+    `${whereToSetThem}\n` +
       " Locally they go in .env (copy .env.example as a starting point).\n",
   );
   process.exit(1);
