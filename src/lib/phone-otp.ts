@@ -103,7 +103,7 @@ export async function sendPhoneCode(rawPhone: string): Promise<SendCodeResult> {
   });
 
   try {
-    await sendSms(phone, `${code} is your Hotelbook code. It expires in 5 minutes.`);
+    await sendSms(phone, `${code} is your BKR code. It expires in 5 minutes.`);
   } catch (error) {
     console.error("SMS send failed:", error);
     return { ok: false, error: "Could not send the code. Try again shortly." };

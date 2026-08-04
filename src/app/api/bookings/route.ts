@@ -13,6 +13,7 @@ const offerSchema = z.object({
   hotelCountry: z.string(),
   hotelImageUrl: z.string().optional(),
   hotelRating: z.number().optional(),
+  chainCode: z.string().optional(),
   roomName: z.string(),
   checkIn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   checkOut: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),

@@ -38,6 +38,8 @@ interface LiteApiHotel {
   country?: string;
   latitude?: number;
   longitude?: number;
+  chain?: string;
+  chainId?: string;
   stars?: number;
   rating?: number;
   reviewCount?: number;
@@ -220,6 +222,7 @@ export class LiteApiProvider implements RateProvider {
         country: meta.country ?? query.countryCode ?? "",
         latitude: meta.latitude,
         longitude: meta.longitude,
+        chainCode: meta.chainId ?? meta.chain,
         starRating: meta.stars,
         reviewScore: meta.rating,
         reviewCount: meta.reviewCount,
@@ -272,6 +275,11 @@ export class LiteApiProvider implements RateProvider {
           firstName: guest.firstName,
           lastName: guest.lastName,
           email: request.holder.email,
+          // Best effort: LiteAPI accepts a loyalty identifier on some rate
+          // types and ignores it on others. Unverified against the live API.
+          ...(request.loyalty
+            ? { loyaltyProgramNumber: request.loyalty.membershipNumber }
+            : {}),
         })),
         clientReference: request.clientReference,
       }),

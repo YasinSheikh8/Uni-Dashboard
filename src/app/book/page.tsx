@@ -172,6 +172,7 @@ export default async function BookPage({
           hotelCountry: hotel.country,
           hotelImageUrl: hotel.imageUrl,
           hotelRating: hotel.reviewScore,
+          chainCode: hotel.chainCode,
           roomName: chosen.rate.roomName,
           checkIn: params.checkIn,
           checkOut: params.checkOut,

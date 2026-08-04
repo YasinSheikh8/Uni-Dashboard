@@ -125,7 +125,7 @@ function isPooled(url) {
 }
 
 const line = "─".repeat(64);
-console.log(`\n${line}\n Hotelbook build preflight\n${line}`);
+console.log(`\n${line}\n BKR build preflight\n${line}`);
 
 /**
  * Conditional failures — configuration that is present but cannot work.

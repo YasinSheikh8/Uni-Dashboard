@@ -23,6 +23,7 @@ interface Offer {
   hotelCountry: string;
   hotelImageUrl?: string;
   hotelRating?: number;
+  chainCode?: string;
   roomName: string;
   checkIn: string;
   checkOut: string;
@@ -266,7 +267,7 @@ export function BookingPanel({
             </>
           ) : (
             <>
-              <Link href="/account" className="btn btn-primary w-full py-3 text-base">
+              <Link href="/setup" className="btn btn-primary w-full py-3 text-base">
                 Finish setup to book
               </Link>
               <p className="mt-3 text-center text-xs text-[var(--color-ink-faint)]">

@@ -45,8 +45,14 @@ model User {
   accounts Account[]
   sessions Session[]
 
-  profile        TravelerProfile?
-  paymentMethods PaymentMethod[]
+  /// How far through the setup wizard they are. Lets us drop someone back
+  /// where they left off instead of restarting the whole flow.
+  onboardingStep String    @default("name")
+  onboardedAt    DateTime?
+
+  profile            TravelerProfile?
+  paymentMethods     PaymentMethod[]
+  loyaltyMemberships LoyaltyMembership[]
 
   organizedBookings Booking[]            @relation("BookingOrganizer")
   participations    BookingParticipant[]
@@ -156,6 +162,12 @@ model Booking {
 
   /// Amount the cheapest rejected competing quote came in at, if any.
   savedAmount Int?
+
+  /// Loyalty membership attached to this reservation, when the guest had one
+  /// matching the hotel's chain. Recorded on our side regardless of whether the
+  /// supplier forwards it, so the guest can quote it at check-in.
+  loyaltyProgramCode String?
+  loyaltyNumber      String?
 
   // ---- Hybrid split settlement ----------------------------------------
   /// Organizer's backstop authorization covering all friends' shares. This is
@@ -275,4 +287,26 @@ model PhoneOtp {
 
   @@index([phone])
   @@index([expiresAt])
+}
+
+/// A guest's hotel loyalty programme membership.
+///
+/// Stored so the number can be attached to reservations. Note that chains
+/// generally do NOT credit points for third-party bookings — see
+/// src/lib/loyalty.ts. The value here is that the property sees the membership
+/// at check-in, which is where discretionary upgrades actually happen.
+model LoyaltyMembership {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Matches a code in LOYALTY_PROGRAMS.
+  programCode      String
+  membershipNumber String
+  /// Free text, e.g. "Gold", "Platinum". Purely informational.
+  tier             String?
+  createdAt        DateTime @default(now())
+
+  @@unique([userId, programCode])
+  @@index([userId])
 }

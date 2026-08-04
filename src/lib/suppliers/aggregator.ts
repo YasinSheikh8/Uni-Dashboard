@@ -173,6 +173,7 @@ export async function searchHotels(
       country: primary.country,
       latitude: withCoords?.latitude,
       longitude: withCoords?.longitude,
+      chainCode: identities.find((i) => i.chainCode)?.chainCode,
       starRating: identities.find((i) => i.starRating != null)?.starRating,
       reviewScore: withReviews?.reviewScore,
       reviewCount: withReviews?.reviewCount,

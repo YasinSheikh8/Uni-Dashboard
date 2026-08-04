@@ -22,6 +22,7 @@ import "server-only";
 import { prisma } from "./db";
 import { getPaymentGateway } from "./payments";
 import { getProvider } from "./suppliers";
+import { programForHotel } from "./loyalty";
 import { nightsBetween } from "./suppliers/liteapi";
 import {
   BACKSTOP_STATUS,
@@ -43,6 +44,8 @@ export interface BookingOffer {
   hotelCountry: string;
   hotelImageUrl?: string;
   hotelRating?: number;
+  /** Supplier chain code, used to pick a matching loyalty membership. */
+  chainCode?: string;
   roomName: string;
   checkIn: string;
   checkOut: string;
@@ -110,6 +113,21 @@ export async function createBooking(
 
   const nights = nightsBetween(offer.checkIn, offer.checkOut);
 
+  // Attach a loyalty membership when the guest has one for this hotel's chain.
+  // Points are not guaranteed on third-party rates, but the number reaching the
+  // property is what makes a discretionary upgrade possible at check-in.
+  const program = programForHotel({
+    name: offer.hotelName,
+    chainCode: offer.chainCode,
+  });
+  const membership = program
+    ? await prisma.loyaltyMembership.findUnique({
+        where: {
+          userId_programCode: { userId: user.id, programCode: program.code },
+        },
+      })
+    : null;
+
   const booking = await prisma.booking.create({
     data: {
       organizerId: user.id,
@@ -133,6 +151,8 @@ export async function createBooking(
       totalAmount: offer.totalAmount,
       priceComparison: offer.priceComparison,
       savedAmount: offer.savedAmount,
+      loyaltyProgramCode: membership?.programCode,
+      loyaltyNumber: membership?.membershipNumber,
       backstopAmount,
       settlementDeadline: friendShares.length > 0 ? settlementDeadline() : null,
       participants: {
@@ -201,6 +221,12 @@ export async function createBooking(
         phone: profile.phone,
       },
       guests: [{ firstName: profile.firstName, lastName: profile.lastName }],
+      loyalty: membership
+        ? {
+            programCode: membership.programCode,
+            membershipNumber: membership.membershipNumber,
+          }
+        : undefined,
       clientReference: booking.id,
     });
 

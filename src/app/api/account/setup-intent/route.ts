@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
  *
  * The card itself is entered into Stripe's iframe and tokenized in the
  * browser — it never touches this server, which keeps the PCI surface at
- * SAQ-A — but the user stays on Hotelbook the whole time. No redirect.
+ * SAQ-A — but the user stays on BKR the whole time. No redirect.
  */
 export async function POST() {
   try {

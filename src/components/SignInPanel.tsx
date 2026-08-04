@@ -152,7 +152,7 @@ export function SignInPanel({
 
   return (
     <div className="card p-7">
-      <h1 className="text-xl font-semibold tracking-[-0.01em]">Continue to Hotelbook</h1>
+      <h1 className="text-xl font-semibold tracking-[-0.01em]">Continue to BKR</h1>
       <p className="mt-1.5 text-sm text-[var(--color-ink-soft)]">
         No separate sign-up. However you continue, your account is waiting.
       </p>

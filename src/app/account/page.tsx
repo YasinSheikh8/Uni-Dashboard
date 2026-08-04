@@ -1,5 +1,10 @@
 import { redirect } from "next/navigation";
-import { CardSection, FriendsSection, ProfileForm } from "@/components/AccountForms";
+import {
+  CardSection,
+  FriendsSection,
+  LoyaltySection,
+  ProfileForm,
+} from "@/components/AccountForms";
 import { signOut } from "@/app/actions";
 import { getCurrentUser, isInstantBookReady } from "@/lib/auth";
 import { prisma } from "@/lib/db";
@@ -25,6 +30,12 @@ export default async function AccountPage() {
   const friends = friendships.map((friendship) =>
     friendship.requesterId === user.id ? friendship.addressee : friendship.requester,
   );
+
+  const memberships = await prisma.loyaltyMembership.findMany({
+    where: { userId: user.id },
+    orderBy: { createdAt: "asc" },
+    select: { programCode: true, membershipNumber: true, tier: true },
+  });
 
   const ready = isInstantBookReady(user);
 
@@ -53,7 +64,7 @@ export default async function AccountPage() {
       >
         {ready
           ? "One-tap booking is on. Pick a room and you're done."
-          : "Add your traveler details and a card to unlock one-tap booking."}
+          : "A few things are still missing for one-tap booking."}
       </div>
 
       <div className="mt-6 space-y-4">
@@ -68,6 +79,7 @@ export default async function AccountPage() {
           }))}
           stripeLive={isStripeConfigured()}
         />
+        <LoyaltySection memberships={memberships} />
         <FriendsSection friends={friends} />
       </div>
     </div>

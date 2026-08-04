@@ -7,6 +7,10 @@ import { z } from "zod";
 import { signIn as authSignIn, signOut as authSignOut } from "@/auth";
 import { getCurrentUser, hashPassword } from "@/lib/auth";
 import { sendPhoneCode } from "@/lib/phone-otp";
+import {
+  normalizeMembershipNumber,
+  validateMembershipNumber,
+} from "@/lib/loyalty";
 import { prisma } from "@/lib/db";
 import { getPaymentGateway, isStripeConfigured } from "@/lib/payments";
 
@@ -61,11 +65,11 @@ export async function signUp(
   });
 
   // Hand straight to Auth.js so the new account is signed in by the same
-  // mechanism as every other route in.
+  // mechanism as every other route in, then straight into setup.
   await authSignIn("password", {
     email,
     password,
-    redirectTo: String(formData.get("next") || "/account"),
+    redirectTo: String(formData.get("next") || "/setup"),
   });
 
   // signIn redirects by throwing, so this is unreachable.
@@ -130,7 +134,9 @@ export async function verifyPhoneCodeAction(
     await authSignIn("phone", {
       phone,
       code,
-      redirectTo: String(formData.get("next") || "/account"),
+      // New phone accounts have nothing on file yet, so setup is the useful
+      // landing place; an existing user simply walks through an empty wizard.
+      redirectTo: String(formData.get("next") || "/setup"),
     });
     return {};
   } catch (error) {
@@ -208,7 +214,7 @@ export async function saveProfile(
  *
  * Real cards are collected in place by `AddCardForm` against a SetupIntent —
  * there is deliberately no redirect to a hosted checkout page anywhere in this
- * app. The user never leaves Hotelbook to pay.
+ * app. The user never leaves BKR to pay.
  */
 export async function addCard(
   _previous: ActionState,
@@ -256,6 +262,136 @@ export async function addCard(
 
   revalidatePath("/account");
   return { success: "Test card saved (Stripe is not configured)" };
+}
+
+/* ------------------------------------------------------------------------- *
+ * Setup wizard
+ *
+ * One action per step. Each saves immediately, so leaving halfway loses
+ * nothing and coming back resumes where it stopped.
+ * ------------------------------------------------------------------------- */
+
+async function upsertProfile(userId: string, data: Record<string, string>) {
+  const existing = await prisma.travelerProfile.findUnique({ where: { userId } });
+  if (existing) {
+    await prisma.travelerProfile.update({ where: { userId }, data });
+  } else {
+    await prisma.travelerProfile.create({
+      data: {
+        userId,
+        firstName: "",
+        lastName: "",
+        phone: "",
+        ...data,
+      },
+    });
+  }
+}
+
+export async function saveStepName(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await getCurrentUser();
+  if (!user) return { error: "Sign in first" };
+
+  const firstName = String(formData.get("firstName") ?? "").trim();
+  const lastName = String(formData.get("lastName") ?? "").trim();
+  if (!firstName || !lastName) return { error: "Both names, please" };
+
+  await upsertProfile(user.id, { firstName, lastName });
+  // Keep the display name in step with the traveler name.
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { name: `${firstName} ${lastName}`.trim() },
+  });
+
+  revalidatePath("/setup");
+  return { success: "saved" };
+}
+
+export async function saveStepPhone(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await getCurrentUser();
+  if (!user) return { error: "Sign in first" };
+
+  const phone = String(formData.get("phone") ?? "").trim();
+  if (phone.replace(/\D/g, "").length < 6) return { error: "Enter a valid phone number" };
+
+  await upsertProfile(user.id, { phone });
+  revalidatePath("/setup");
+  return { success: "saved" };
+}
+
+export async function saveStepEmail(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await getCurrentUser();
+  if (!user) return { error: "Sign in first" };
+
+  const contactEmail = String(formData.get("contactEmail") ?? "").trim().toLowerCase();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(contactEmail)) {
+    return { error: "Enter a valid email" };
+  }
+
+  await upsertProfile(user.id, { contactEmail });
+  revalidatePath("/setup");
+  return { success: "saved" };
+}
+
+export async function addLoyaltyMembership(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await getCurrentUser();
+  if (!user) return { error: "Sign in first" };
+
+  const programCode = String(formData.get("programCode") ?? "");
+  const raw = String(formData.get("membershipNumber") ?? "");
+
+  const check = validateMembershipNumber(programCode, raw);
+  if (!check.ok) return { error: check.error };
+
+  const membershipNumber = normalizeMembershipNumber(raw);
+  const tier = String(formData.get("tier") ?? "").trim() || null;
+
+  await prisma.loyaltyMembership.upsert({
+    where: { userId_programCode: { userId: user.id, programCode } },
+    create: { userId: user.id, programCode, membershipNumber, tier },
+    update: { membershipNumber, tier },
+  });
+
+  revalidatePath("/setup");
+  revalidatePath("/account");
+  return { success: "Added" };
+}
+
+export async function removeLoyaltyMembership(formData: FormData): Promise<void> {
+  const user = await getCurrentUser();
+  if (!user) return;
+
+  await prisma.loyaltyMembership.deleteMany({
+    where: { userId: user.id, programCode: String(formData.get("programCode") ?? "") },
+  });
+
+  revalidatePath("/setup");
+  revalidatePath("/account");
+}
+
+/** Marks setup finished, so the wizard stops intercepting. */
+export async function completeOnboarding(): Promise<void> {
+  const user = await getCurrentUser();
+  if (!user) return;
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { onboardedAt: new Date(), onboardingStep: "done" },
+  });
+
+  redirect("/");
 }
 
 export async function addFriend(
