@@ -110,6 +110,10 @@ const SIGN_IN_METHODS = [
     vars: ["APPLE_CLIENT_ID", "APPLE_TEAM_ID", "APPLE_KEY_ID", "APPLE_PRIVATE_KEY"],
   },
   {
+    label: "Email sign-in codes",
+    vars: ["RESEND_API_KEY", "EMAIL_FROM"],
+  },
+  {
     label: "Phone sign-in SMS",
     vars: ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_FROM_NUMBER"],
   },

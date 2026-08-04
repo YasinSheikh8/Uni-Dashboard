@@ -7,6 +7,7 @@ import { z } from "zod";
 import { signIn as authSignIn, signOut as authSignOut } from "@/auth";
 import { getCurrentUser, hashPassword } from "@/lib/auth";
 import { sendPhoneCode } from "@/lib/phone-otp";
+import { sendEmailCode } from "@/lib/email-otp";
 import {
   normalizeMembershipNumber,
   validateMembershipNumber,
@@ -121,6 +122,45 @@ export async function requestPhoneCode(
     devCode: result.devCode,
     phone,
   };
+}
+
+/**
+ * Sends an email sign-in code.
+ *
+ * `devCode` comes back only when no email provider is configured, so the flow
+ * stays walkable locally without a Resend account.
+ */
+export async function requestEmailCode(
+  _previous: ActionState & { devCode?: string; email?: string },
+  formData: FormData,
+): Promise<ActionState & { devCode?: string; email?: string }> {
+  const email = String(formData.get("email") ?? "");
+  const result = await sendEmailCode(email);
+
+  if (!result.ok) return { error: result.error };
+  return { success: "Code sent", devCode: result.devCode, email };
+}
+
+export async function verifyEmailCodeAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const email = String(formData.get("email") ?? "");
+  const code = String(formData.get("code") ?? "");
+
+  try {
+    await authSignIn("email-code", {
+      email,
+      code,
+      redirectTo: String(formData.get("next") || "/setup"),
+    });
+    return {};
+  } catch (error) {
+    if (error instanceof AuthError) {
+      return { error: "That code is not right, or it has expired." };
+    }
+    throw error;
+  }
 }
 
 export async function verifyPhoneCodeAction(

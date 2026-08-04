@@ -310,3 +310,25 @@ model LoyaltyMembership {
   @@unique([userId, programCode])
   @@index([userId])
 }
+
+/// One-time codes for email sign-in.
+///
+/// A separate table from PhoneOtp rather than one generalised table, purely so
+/// adding this channel is an additive migration. Renaming the existing model
+/// would have Prisma drop and recreate it, which stops the build behind the
+/// data-loss guard for no benefit — these rows are five-minute codes.
+///
+/// The security policy for both lives in src/lib/otp-core.ts, so the two
+/// channels cannot drift apart.
+model EmailOtp {
+  id        String   @id @default(cuid())
+  email     String
+  codeHash  String
+  expiresAt DateTime
+  attempts  Int      @default(0)
+  consumed  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([email])
+  @@index([expiresAt])
+}

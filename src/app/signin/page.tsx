@@ -17,7 +17,11 @@ export default async function SignInPage({
     <div className="mx-auto max-w-md px-6 py-14">
       <SignInPanel
         next={next}
-        providers={{ google: enabledProviders.google, apple: enabledProviders.apple }}
+        providers={{
+          google: enabledProviders.google,
+          apple: enabledProviders.apple,
+          phone: enabledProviders.phone,
+        }}
       />
     </div>
   );
