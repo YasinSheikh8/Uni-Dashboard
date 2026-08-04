@@ -1,30 +1,17 @@
 /**
- * Session handling.
+ * Session access for the rest of the app.
  *
- * Deliberately small: a signed JWT in an httpOnly cookie, users in our own
- * table. There is no OAuth here yet — when you add Google/Apple sign-in, swap
- * the internals of `createSession`/`getCurrentUser` and nothing else moves.
+ * Auth.js owns signing in and out; this module is the read side. It keeps the
+ * same shape it had when sessions were a hand-rolled JWT cookie, so pages, API
+ * routes and the booking engine did not have to change when the provider set
+ * grew to Google, Apple and phone.
  */
 
 import "server-only";
 
 import bcrypt from "bcryptjs";
-import { SignJWT, jwtVerify } from "jose";
-import { cookies } from "next/headers";
+import { auth } from "@/auth";
 import { prisma } from "./db";
-
-const COOKIE_NAME = "hb_session";
-const SESSION_DAYS = 30;
-
-function secret(): Uint8Array {
-  const value = process.env.SESSION_SECRET;
-  if (!value || value.length < 16) {
-    throw new Error(
-      "SESSION_SECRET is missing or too short. Set it in .env (openssl rand -base64 32).",
-    );
-  }
-  return new TextEncoder().encode(value);
-}
 
 export async function hashPassword(plain: string): Promise<string> {
   return bcrypt.hash(plain, 12);
@@ -34,40 +21,10 @@ export async function verifyPassword(plain: string, hash: string): Promise<boole
   return bcrypt.compare(plain, hash);
 }
 
-export async function createSession(userId: string): Promise<void> {
-  const token = await new SignJWT({ sub: userId })
-    .setProtectedHeader({ alg: "HS256" })
-    .setIssuedAt()
-    .setExpirationTime(`${SESSION_DAYS}d`)
-    .sign(secret());
-
-  const store = await cookies();
-  store.set(COOKIE_NAME, token, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: SESSION_DAYS * 24 * 60 * 60,
-  });
-}
-
-export async function destroySession(): Promise<void> {
-  const store = await cookies();
-  store.delete(COOKIE_NAME);
-}
-
 export async function getCurrentUserId(): Promise<string | null> {
-  const store = await cookies();
-  const token = store.get(COOKIE_NAME)?.value;
-  if (!token) return null;
-
-  try {
-    const { payload } = await jwtVerify(token, secret());
-    return typeof payload.sub === "string" ? payload.sub : null;
-  } catch {
-    // Expired or tampered — treat as signed out rather than erroring the page.
-    return null;
-  }
+  const session = await auth();
+  const id = (session?.user as { id?: string } | undefined)?.id;
+  return id ?? null;
 }
 
 export async function getCurrentUser() {
@@ -97,17 +54,30 @@ export class UnauthorizedError extends Error {
 }
 
 /**
- * True when the user can book in one tap: complete traveler details and a
- * saved card. This is the gate for the whole instant-booking promise.
+ * True when the user can book in one tap: complete traveler details and a saved
+ * card. This is the gate for the whole instant-booking promise.
+ *
+ * It deliberately does not care HOW they signed in. What a booking needs is a
+ * name, a phone number, a card, and somewhere to send the confirmation — so an
+ * account with no email of its own qualifies as soon as the traveler profile
+ * supplies a contact address.
  */
 export function isInstantBookReady(user: {
-  profile: { firstName: string; lastName: string; phone: string } | null;
+  email: string | null;
+  profile: {
+    firstName: string;
+    lastName: string;
+    phone: string;
+    contactEmail: string | null;
+  } | null;
   paymentMethods: unknown[];
 }): boolean {
   return Boolean(
     user.profile?.firstName &&
       user.profile?.lastName &&
       user.profile?.phone &&
+      // Some address must exist for the hotel's confirmation, from either side.
+      (user.email || user.profile?.contactEmail) &&
       user.paymentMethods.length > 0,
   );
 }

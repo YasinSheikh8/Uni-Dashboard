@@ -73,6 +73,15 @@ export async function createBooking(
     throw new BookingError("Complete your traveler profile before booking");
   }
 
+  // Suppliers put a contact address on the reservation, so a booking needs one
+  // even when the account itself has none (phone sign-in, Apple hide-my-email).
+  const contactEmail = user.email ?? profile.contactEmail;
+  if (!contactEmail) {
+    throw new BookingError(
+      "Add a contact email to your traveler details — the hotel sends your confirmation there",
+    );
+  }
+
   const card =
     user.paymentMethods.find((method) => method.isDefault) ?? user.paymentMethods[0];
   if (!card) throw new BookingError("Add a card before booking");
@@ -188,7 +197,7 @@ export async function createBooking(
       holder: {
         firstName: profile.firstName,
         lastName: profile.lastName,
-        email: user.email,
+        email: contactEmail,
         phone: profile.phone,
       },
       guests: [{ firstName: profile.firstName, lastName: profile.lastName }],

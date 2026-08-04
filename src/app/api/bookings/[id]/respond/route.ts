@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { UnauthorizedError, requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { participantIdentity } from "@/lib/participants";
 import {
   authorizeParticipantShare,
   declineParticipantShare,
@@ -30,7 +31,7 @@ export async function POST(
       where: {
         bookingId: id,
         role: "friend",
-        OR: [{ userId: user.id }, { email: user.email }],
+        ...participantIdentity(user),
       },
     });
 

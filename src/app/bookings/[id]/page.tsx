@@ -4,6 +4,7 @@ import { HotelImage } from "@/components/HotelImage";
 import { ShareActions } from "@/components/ShareActions";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { isMe } from "@/lib/participants";
 import { formatMoney } from "@/lib/money";
 import { PARTICIPANT_STATUS } from "@/lib/split";
 
@@ -37,9 +38,7 @@ export default async function BookingDetailPage({
 
   if (!booking) notFound();
 
-  const mine = booking.participants.find(
-    (participant) => participant.userId === user.id || participant.email === user.email,
-  );
+  const mine = booking.participants.find((participant) => isMe(participant, user));
   const isOrganizer = booking.organizerId === user.id;
   if (!mine && !isOrganizer) notFound();
 
@@ -129,7 +128,7 @@ export default async function BookingDetailPage({
             return (
               <li key={participant.id} className="flex items-center gap-3 text-sm">
                 <span className="min-w-0 flex-1 truncate">
-                  {participant.name ?? participant.email}
+                  {participant.name ?? participant.email ?? "Guest"}
                   {participant.role === "organizer" && (
                     <span className="ml-2 text-xs text-[var(--color-ink-faint)]">organizer</span>
                   )}

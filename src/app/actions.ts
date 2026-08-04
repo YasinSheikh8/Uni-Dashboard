@@ -2,14 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { AuthError } from "next-auth";
 import { z } from "zod";
-import {
-  createSession,
-  destroySession,
-  getCurrentUser,
-  hashPassword,
-  verifyPassword,
-} from "@/lib/auth";
+import { signIn as authSignIn, signOut as authSignOut } from "@/auth";
+import { getCurrentUser, hashPassword } from "@/lib/auth";
+import { sendPhoneCode } from "@/lib/phone-otp";
 import { prisma } from "@/lib/db";
 import { getPaymentGateway, isStripeConfigured } from "@/lib/payments";
 
@@ -63,8 +60,16 @@ export async function signUp(
     data: { userId: user.id },
   });
 
-  await createSession(user.id);
-  redirect(String(formData.get("next") || "/account"));
+  // Hand straight to Auth.js so the new account is signed in by the same
+  // mechanism as every other route in.
+  await authSignIn("password", {
+    email,
+    password,
+    redirectTo: String(formData.get("next") || "/account"),
+  });
+
+  // signIn redirects by throwing, so this is unreachable.
+  return {};
 }
 
 export async function signIn(
@@ -74,25 +79,100 @@ export async function signIn(
   const email = String(formData.get("email") ?? "").toLowerCase().trim();
   const password = String(formData.get("password") ?? "");
 
-  const user = await prisma.user.findUnique({ where: { email } });
-  // Same message either way — do not confirm which emails exist.
-  if (!user || !(await verifyPassword(password, user.passwordHash))) {
-    return { error: "Email or password is incorrect" };
+  try {
+    await authSignIn("password", {
+      email,
+      password,
+      redirectTo: String(formData.get("next") || "/"),
+    });
+    return {};
+  } catch (error) {
+    // A successful sign-in redirects by throwing, so only genuine auth
+    // failures land here. Everything else must be rethrown or the redirect
+    // is swallowed.
+    if (error instanceof AuthError) {
+      // Same message either way — never confirm which emails exist.
+      return { error: "Email or password is incorrect" };
+    }
+    throw error;
   }
+}
 
-  await createSession(user.id);
-  redirect(String(formData.get("next") || "/"));
+/**
+ * Sends an SMS sign-in code.
+ *
+ * `devCode` comes back only when no SMS provider is configured, so the flow
+ * stays walkable locally without a Twilio account or a real handset.
+ */
+export async function requestPhoneCode(
+  _previous: ActionState & { devCode?: string; phone?: string },
+  formData: FormData,
+): Promise<ActionState & { devCode?: string; phone?: string }> {
+  const phone = String(formData.get("phone") ?? "");
+  const result = await sendPhoneCode(phone);
+
+  if (!result.ok) return { error: result.error };
+  return {
+    success: "Code sent",
+    devCode: result.devCode,
+    phone,
+  };
+}
+
+export async function verifyPhoneCodeAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const phone = String(formData.get("phone") ?? "");
+  const code = String(formData.get("code") ?? "");
+
+  try {
+    await authSignIn("phone", {
+      phone,
+      code,
+      redirectTo: String(formData.get("next") || "/account"),
+    });
+    return {};
+  } catch (error) {
+    if (error instanceof AuthError) {
+      return { error: "That code is not right, or it has expired." };
+    }
+    throw error;
+  }
 }
 
 export async function signOut(): Promise<void> {
-  await destroySession();
-  redirect("/");
+  await authSignOut({ redirectTo: "/" });
+}
+
+/**
+ * OAuth entry points.
+ *
+ * Thin wrappers so the sign-in panel can stay a client component while the
+ * redirect is initiated on the server, which is what keeps the OAuth state and
+ * PKCE cookies httpOnly.
+ */
+export async function signInWithGoogle(formData: FormData): Promise<void> {
+  await authSignIn("google", {
+    redirectTo: String(formData.get("next") || "/account"),
+  });
+}
+
+export async function signInWithApple(formData: FormData): Promise<void> {
+  await authSignIn("apple", {
+    redirectTo: String(formData.get("next") || "/account"),
+  });
 }
 
 const profileSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
   phone: z.string().min(5, "Phone number is required"),
+  contactEmail: z
+    .string()
+    .email("Enter a valid email")
+    .optional()
+    .or(z.literal("").transform(() => undefined)),
   nationality: z.string().optional(),
   addressLine1: z.string().optional(),
   addressCity: z.string().optional(),

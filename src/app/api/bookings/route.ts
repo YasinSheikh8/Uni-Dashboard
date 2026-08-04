@@ -60,8 +60,9 @@ export async function POST(request: Request) {
       );
     }
 
-    // Deduplicate and drop the organizer if they invited themselves.
-    const seen = new Set<string>([user.email.toLowerCase()]);
+    // Deduplicate and drop the organizer if they invited themselves. An
+    // organizer with no email cannot collide with an invited address.
+    const seen = new Set<string>(user.email ? [user.email.toLowerCase()] : []);
     const uniqueFriends = friends.filter((friend) => {
       const email = friend.email.toLowerCase();
       if (seen.has(email)) return false;

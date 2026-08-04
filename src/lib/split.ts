@@ -53,7 +53,8 @@ export const BACKSTOP_STATUS = {
 } as const;
 
 export interface ShareInput {
-  email: string;
+  /** Null for participants with no email — they are identified by userId. */
+  email: string | null;
   name?: string;
   userId?: string | null;
   /** Omit for an equal split; provide to weight or fix a person's amount. */

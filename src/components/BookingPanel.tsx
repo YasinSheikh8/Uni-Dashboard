@@ -8,7 +8,8 @@ import { formatMoney, splitEqually } from "@/lib/money";
 interface FriendOption {
   id: string;
   name: string;
-  email: string;
+  /** Absent for phone-only accounts; such a friend is invited by user id. */
+  email: string | null;
   avatarColor: string;
 }
 
@@ -41,7 +42,7 @@ export function BookingPanel({
   taxesAndFees,
 }: {
   offer: Offer;
-  currentUser: { id: string; name: string; email: string };
+  currentUser: { id: string; name: string; email: string | null };
   friends: FriendOption[];
   instantReady: boolean;
   taxesAndFees: number;
@@ -55,10 +56,14 @@ export function BookingPanel({
   const [error, setError] = useState<string | null>(null);
 
   const participants = useMemo(() => {
-    const people = [{ label: `${currentUser.name} (you)`, email: currentUser.email }];
+    const people: Array<{ label: string; key: string; email: string | null }> = [
+      { label: `${currentUser.name} (you)`, key: currentUser.id, email: currentUser.email },
+    ];
     if (splitting) {
-      for (const friend of selected) people.push({ label: friend.name, email: friend.email });
-      for (const email of invited) people.push({ label: email, email });
+      for (const friend of selected) {
+        people.push({ label: friend.name, key: friend.id, email: friend.email });
+      }
+      for (const email of invited) people.push({ label: email, key: email, email });
     }
     return people;
   }, [splitting, selected, invited, currentUser]);
@@ -76,7 +81,7 @@ export function BookingPanel({
   function addInvite() {
     const email = inviteEmail.trim().toLowerCase();
     if (!email || !email.includes("@")) return;
-    if (email === currentUser.email) return;
+    if (currentUser.email && email === currentUser.email) return;
     if (invited.includes(email) || selected.some((f) => f.email === email)) return;
     setInvited((current) => [...current, email]);
     setInviteEmail("");
@@ -94,7 +99,7 @@ export function BookingPanel({
           friends: splitting
             ? [
                 ...selected.map((friend) => ({
-                  email: friend.email,
+                  email: friend.email ?? undefined,
                   name: friend.name,
                   userId: friend.id,
                 })),
@@ -220,7 +225,7 @@ export function BookingPanel({
                 <span className="label">Split {participants.length} ways</span>
                 <ul className="space-y-1.5 text-sm">
                   {participants.map((person, index) => (
-                    <li key={person.email} className="flex justify-between gap-3">
+                    <li key={person.key} className="flex justify-between gap-3">
                       <span className="truncate text-[var(--color-ink-soft)]">
                         {person.label}
                       </span>

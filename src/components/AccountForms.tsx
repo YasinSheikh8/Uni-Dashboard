@@ -25,11 +25,14 @@ function Message({ state }: { state: ActionState }) {
 
 export function ProfileForm({
   profile,
+  accountEmail,
 }: {
+  accountEmail: string | null;
   profile: {
     firstName: string;
     lastName: string;
     phone: string;
+    contactEmail: string | null;
     nationality: string | null;
     addressLine1: string | null;
     addressCity: string | null;
@@ -50,6 +53,18 @@ export function ProfileForm({
         <Field name="firstName" label="First name" defaultValue={profile?.firstName} required />
         <Field name="lastName" label="Last name" defaultValue={profile?.lastName} required />
         <Field name="phone" label="Phone" defaultValue={profile?.phone} required />
+        {/* Only asked for when the account itself has no address — a phone
+            sign-in, or Apple's hide-my-email. The hotel needs somewhere to
+            send the confirmation. */}
+        {!accountEmail && (
+          <Field
+            name="contactEmail"
+            label="Email for confirmations"
+            defaultValue={profile?.contactEmail}
+            placeholder="you@example.com"
+            required
+          />
+        )}
         <Field name="nationality" label="Nationality" defaultValue={profile?.nationality} placeholder="GB" />
         <Field name="addressLine1" label="Address" defaultValue={profile?.addressLine1} />
         <Field name="addressCity" label="City" defaultValue={profile?.addressCity} />
@@ -158,7 +173,7 @@ export function CardSection({
 export function FriendsSection({
   friends,
 }: {
-  friends: Array<{ id: string; name: string; email: string; avatarColor: string }>;
+  friends: Array<{ id: string; name: string; email: string | null; avatarColor: string }>;
 }) {
   const [state, formAction, pending] = useActionState(addFriend, {} as ActionState);
 
@@ -180,7 +195,9 @@ export function FriendsSection({
                 {friend.name.slice(0, 1).toUpperCase()}
               </span>
               <span className="font-medium">{friend.name}</span>
-              <span className="truncate text-[var(--color-ink-faint)]">{friend.email}</span>
+              <span className="truncate text-[var(--color-ink-faint)]">
+                {friend.email ?? "phone account"}
+              </span>
             </li>
           ))}
         </ul>

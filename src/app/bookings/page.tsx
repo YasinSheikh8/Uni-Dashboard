@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { HotelImage } from "@/components/HotelImage";
 import { prisma } from "@/lib/db";
+import { isMe, participantIdentity } from "@/lib/participants";
 import { formatMoney } from "@/lib/money";
 import { PARTICIPANT_STATUS } from "@/lib/split";
 
@@ -17,7 +18,7 @@ export default async function BookingsPage() {
     where: {
       OR: [
         { organizerId: user.id },
-        { participants: { some: { OR: [{ userId: user.id }, { email: user.email }] } } },
+        { participants: { some: participantIdentity(user) } },
       ],
     },
     include: { participants: true },
@@ -38,9 +39,8 @@ export default async function BookingsPage() {
       ) : (
         <ul className="mt-6 space-y-3">
           {bookings.map((booking) => {
-            const mine = booking.participants.find(
-              (participant) =>
-                participant.userId === user.id || participant.email === user.email,
+            const mine = booking.participants.find((participant) =>
+              isMe(participant, user),
             );
             const awaitingYou =
               mine?.role === "friend" && mine.status === PARTICIPANT_STATUS.PENDING;

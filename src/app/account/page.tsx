@@ -33,7 +33,9 @@ export default async function AccountPage() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-[-0.02em]">Account</h1>
-          <p className="mt-1 text-sm text-[var(--color-ink-soft)]">{user.email}</p>
+          <p className="mt-1 text-sm text-[var(--color-ink-soft)]">
+            {user.email ?? user.phone ?? "Signed in"}
+          </p>
         </div>
         <form action={signOut}>
           <button type="submit" className="btn btn-ghost text-sm">
@@ -55,7 +57,7 @@ export default async function AccountPage() {
       </div>
 
       <div className="mt-6 space-y-4">
-        <ProfileForm profile={user.profile} />
+        <ProfileForm profile={user.profile} accountEmail={user.email} />
         <CardSection
           cards={user.paymentMethods.map((method) => ({
             id: method.id,
