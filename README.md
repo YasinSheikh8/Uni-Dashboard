@@ -218,7 +218,15 @@ and Stripe keys you are using.
 You do not have to remember that list. `npm run build` starts with a preflight
 (`npm run preflight` to run it alone) that prints exactly which variables are
 set, warns about the ones that degrade behaviour, and stops the build with a
-plain-English explanation when a genuinely required one is missing. It exists
+plain-English explanation when something is wrong.
+
+It stops for values that are *present but unusable*, not just missing ones:
+
+- a **pooled** `DATABASE_URL` with no `DIRECT_URL` — Neon and Supabase both hand
+  you the pooled string by default, and the schema push would hang against
+  PgBouncer several steps later;
+- a **SQLite** `DATABASE_URL` on a deploy platform — that build would go green
+  and then lose every booking on the first cold start. It exists
 because the raw failures were unreadable — a missing `DATABASE_URL` used to
 surface as a Prisma wasm dump forty lines into the log.
 
