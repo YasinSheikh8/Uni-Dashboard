@@ -195,6 +195,8 @@ export interface SearchDiagnostics {
 export interface AggregatedSearchResult {
   hotels: AggregatedHotel[];
   diagnostics: SearchDiagnostics[];
+  /** Country the destination resolved to, if any. Undefined means unresolved. */
+  resolvedCountryCode?: string;
   currency: string;
   nights: number;
   /** Suppliers that actually answered. */

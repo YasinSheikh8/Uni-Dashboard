@@ -95,6 +95,12 @@ async function Results({
             Cheapest of {result.diagnostics.length} source
             {result.diagnostics.length === 1 ? "" : "s"}, all taxes in
           </p>
+          {!result.resolvedCountryCode && result.hotels.length === 0 && (
+            <p className="mt-2 text-sm text-[var(--color-warn)]">
+              We couldn&apos;t tell which country {query.destination} is in. Try
+              adding it, like &ldquo;{query.destination}, PT&rdquo;.
+            </p>
+          )}
         </div>
 
         <div className="flex items-center gap-0.5 rounded-full bg-[var(--color-accent-soft)] p-1 text-sm">
@@ -111,10 +117,17 @@ async function Results({
       </div>
 
       {failed.length > 0 && (
-        <p className="mt-5 text-xs text-[var(--color-warn)]">
-          {failed.map((entry) => entry.supplierLabel).join(", ")} didn&apos;t respond.
-          Showing everything else.
-        </p>
+        <div className="mt-5 space-y-1 text-xs text-[var(--color-warn)]">
+          {failed.map((entry) => (
+            <p key={entry.supplier}>
+              {entry.supplierLabel} didn&apos;t respond
+              {/* The reason is shown because "it didn't work" is not
+                  actionable. Supplier errors carry no credentials — the
+                  adapters throw status codes and response snippets. */}
+              {entry.error ? <span className="opacity-80"> — {entry.error}</span> : null}
+            </p>
+          ))}
+        </div>
       )}
 
       {result.hotels.length === 0 ? (

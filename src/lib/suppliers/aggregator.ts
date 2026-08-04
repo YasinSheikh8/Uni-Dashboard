@@ -15,6 +15,7 @@
  */
 
 import { convert } from "./currency";
+import { resolveDestination } from "../destinations";
 import { clusterHotels, clusterId } from "./match";
 import { getProviders } from "./index";
 import type {
@@ -61,6 +62,12 @@ async function runSupplier(
     };
   } catch (error) {
     const aborted = controller.signal.aborted;
+    // Always log the real reason. "Didn't respond" in the UI is fine for a
+    // guest; it is useless for whoever has to fix it.
+    console.error(
+      `[search] ${provider.label} failed:`,
+      aborted ? `aborted after ${SUPPLIER_TIMEOUT_MS}ms` : error,
+    );
     return {
       provider,
       offers: [],
@@ -83,12 +90,27 @@ async function runSupplier(
 }
 
 export async function searchHotels(
-  query: SearchQuery,
+  rawQuery: SearchQuery,
   sort: SortMode = "best_price",
   /** Test seam. Defaults to the configured registry. */
   providerOverride?: RateProvider[],
 ): Promise<AggregatedSearchResult> {
   const providers = providerOverride ?? getProviders();
+
+  /**
+   * Resolve the destination BEFORE fanning out.
+   *
+   * Suppliers reject an incomplete location: LiteAPI needs cityName AND
+   * countryCode, not a bare city. Sending "Lisbon" alone produced a rejected
+   * request that surfaced to users as "the supplier didn't respond", which sent
+   * everyone looking for a network problem that was never there.
+   */
+  const resolved = resolveDestination(rawQuery.destination);
+  const query: SearchQuery = {
+    ...rawQuery,
+    destination: resolved.city || rawQuery.destination,
+    countryCode: rawQuery.countryCode ?? resolved.countryCode,
+  };
 
   const runs = await Promise.all(
     providers.map((provider) => runSupplier(provider, query)),
@@ -193,6 +215,7 @@ export async function searchHotels(
   return {
     hotels,
     diagnostics,
+    resolvedCountryCode: query.countryCode,
     currency: query.currency,
     nights: hotels[0]?.nights ?? 1,
     suppliersQueried: diagnostics.filter((d) => d.status === "ok").length,

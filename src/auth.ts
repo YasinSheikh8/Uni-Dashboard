@@ -8,6 +8,7 @@ import bcrypt from "bcryptjs";
 
 import { prisma } from "@/lib/db";
 import { verifyPhoneCode } from "@/lib/phone-otp";
+import { verifyEmailCode } from "@/lib/email-otp";
 
 /**
  * Authentication.
@@ -101,6 +102,61 @@ if (appleConfigured) {
     }),
   );
 }
+
+/**
+ * Email + one-time code.
+ *
+ * The passwordless default: no per-message cost, works everywhere, and creates
+ * the account on first use like the social routes do.
+ */
+providers.push(
+  Credentials({
+    id: "email-code",
+    name: "Email code",
+    credentials: {
+      email: { label: "Email", type: "email" },
+      code: { label: "Code", type: "text" },
+    },
+    async authorize(raw) {
+      const email = typeof raw?.email === "string" ? raw.email : "";
+      const code = typeof raw?.code === "string" ? raw.code : "";
+
+      const result = await verifyEmailCode(email, code);
+      if (!result.ok || !result.identifier) return null;
+
+      const existing = await prisma.user.findUnique({
+        where: { email: result.identifier },
+      });
+
+      if (existing) {
+        if (!existing.emailVerified) {
+          await prisma.user.update({
+            where: { id: existing.id },
+            data: { emailVerified: new Date() },
+          });
+        }
+        return { id: existing.id, name: existing.name, email: existing.email };
+      }
+
+      const created = await prisma.user.create({
+        data: {
+          email: result.identifier,
+          emailVerified: new Date(),
+          name: result.identifier.split("@")[0],
+          avatarColor: colorFor(result.identifier),
+        },
+      });
+
+      // Claim split shares invited against this address before they signed up.
+      await prisma.bookingParticipant.updateMany({
+        where: { email: result.identifier, userId: null },
+        data: { userId: created.id },
+      });
+
+      return { id: created.id, name: created.name, email: created.email };
+    },
+  }),
+);
 
 /** Phone + SMS code. */
 providers.push(
@@ -229,6 +285,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth(authConfig);
 export const enabledProviders = {
   google: googleConfigured,
   apple: appleConfigured,
-  phone: true,
+  emailCode: true,
+  /**
+   * Phone stays wired up but is hidden by default. Every SMS costs money, and
+   * email codes give the same flow for nothing — so the channel is opt-in via
+   * ENABLE_PHONE_SIGN_IN rather than removed, and switching it on later is one
+   * variable rather than a rebuild.
+   */
+  phone: process.env.ENABLE_PHONE_SIGN_IN === "true",
   password: true,
 };

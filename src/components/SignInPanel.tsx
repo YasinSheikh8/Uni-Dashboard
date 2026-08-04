@@ -3,11 +3,13 @@
 import { useActionState, useEffect, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 import {
+  requestEmailCode,
   requestPhoneCode,
   signIn,
   signInWithApple,
   signInWithGoogle,
   signUp,
+  verifyEmailCodeAction,
   verifyPhoneCodeAction,
   type ActionState,
 } from "@/app/actions";
@@ -29,6 +31,7 @@ import { AppleMark, GoogleMark } from "./BrandIcons";
  */
 
 type PhoneState = ActionState & { devCode?: string; phone?: string };
+type EmailState = ActionState & { devCode?: string; email?: string };
 
 function SubmitButton({
   children,
@@ -52,12 +55,21 @@ export function SignInPanel({
   providers,
 }: {
   next?: string;
-  providers: { google: boolean; apple: boolean };
+  providers: { google: boolean; apple: boolean; phone: boolean };
 }) {
   const [stage, setStage] = useState<"choose" | "code">("choose");
+  const [channel, setChannel] = useState<"email" | "phone">("email");
   const [showEmail, setShowEmail] = useState(false);
   const [emailMode, setEmailMode] = useState<"signin" | "signup">("signin");
 
+  const [emailState, emailAction] = useActionState<EmailState, FormData>(
+    requestEmailCode,
+    {},
+  );
+  const [emailCodeState, emailCodeAction] = useActionState<ActionState, FormData>(
+    verifyEmailCodeAction,
+    {},
+  );
   const [phoneState, phoneAction] = useActionState<PhoneState, FormData>(
     requestPhoneCode,
     {},
@@ -75,7 +87,17 @@ export function SignInPanel({
 
   // Advance to the code step as soon as one has actually been sent.
   useEffect(() => {
+    if (emailState.success && emailState.email) {
+      setChannel("email");
+      setStage("code");
+      setCode("");
+      requestAnimationFrame(() => codeInputRef.current?.focus());
+    }
+  }, [emailState]);
+
+  useEffect(() => {
     if (phoneState.success && phoneState.phone) {
+      setChannel("phone");
       setStage("code");
       setCode("");
       requestAnimationFrame(() => codeInputRef.current?.focus());
@@ -84,15 +106,22 @@ export function SignInPanel({
 
   // Submit the moment the code is complete. Asking someone to type six digits
   // and then find a button is a step that does not need to exist.
+  const activeCodeError = channel === "email" ? emailCodeState.error : codeState.error;
+
   useEffect(() => {
-    if (code.length === 6 && !codeState.error) {
+    if (code.length === 6 && !activeCodeError) {
       codeFormRef.current?.requestSubmit();
     }
-  }, [code, codeState.error]);
+  }, [code, activeCodeError]);
 
   const anySocial = providers.google || providers.apple;
 
   if (stage === "code") {
+    const isEmail = channel === "email";
+    const sentTo = isEmail ? emailState.email : phoneState.phone;
+    const devCode = isEmail ? emailState.devCode : phoneState.devCode;
+    const resendAction = isEmail ? emailAction : phoneAction;
+
     return (
       <div className="card p-7">
         <button
@@ -104,12 +133,18 @@ export function SignInPanel({
         </button>
 
         <h1 className="mt-4 text-xl font-semibold tracking-[-0.01em]">Enter your code</h1>
-        <p className="mt-1.5 text-sm text-[var(--color-ink-soft)]">
-          Sent to {phoneState.phone}
-        </p>
+        <p className="mt-1.5 text-sm text-[var(--color-ink-soft)]">Sent to {sentTo}</p>
 
-        <form ref={codeFormRef} action={codeAction} className="mt-5">
-          <input type="hidden" name="phone" value={phoneState.phone ?? ""} />
+        <form
+          ref={codeFormRef}
+          action={isEmail ? emailCodeAction : codeAction}
+          className="mt-5"
+        >
+          <input
+            type="hidden"
+            name={isEmail ? "email" : "phone"}
+            value={sentTo ?? ""}
+          />
           {next && <input type="hidden" name="next" value={next} />}
 
           <input
@@ -125,23 +160,28 @@ export function SignInPanel({
             aria-label="Six digit code"
           />
 
-          {phoneState.devCode && (
+          {devCode && (
             <p className="mt-3 rounded-[var(--radius-control)] bg-[var(--color-warn-soft)] px-3 py-2 text-xs text-[var(--color-warn)]">
-              No SMS provider configured, so here is the code: <strong>{phoneState.devCode}</strong>
+              No delivery provider configured, so here is the code:{" "}
+              <strong>{devCode}</strong>
             </p>
           )}
 
-          {codeState.error && (
+          {activeCodeError && (
             <p className="mt-3 rounded-[var(--radius-control)] bg-[var(--color-danger-soft)] px-3 py-2 text-sm text-[var(--color-danger)]">
-              {codeState.error}
+              {activeCodeError}
             </p>
           )}
 
           <SubmitButton className="btn btn-primary mt-4 w-full py-3">Continue</SubmitButton>
         </form>
 
-        <form action={phoneAction} className="mt-3">
-          <input type="hidden" name="phone" value={phoneState.phone ?? ""} />
+        <form action={resendAction} className="mt-3">
+          <input
+            type="hidden"
+            name={isEmail ? "email" : "phone"}
+            value={sentTo ?? ""}
+          />
           <SubmitButton className="btn btn-ghost w-full text-sm">
             Send a new code
           </SubmitButton>
@@ -189,29 +229,56 @@ export function SignInPanel({
         </div>
       )}
 
-      <form action={phoneAction} className={anySocial ? "" : "mt-6"}>
-        <label className="label" htmlFor="phone">
-          Phone number
+      {/* Email codes are the default passwordless route: no per-message cost,
+          works on every device, same one-tap feel. */}
+      <form action={emailAction} className={anySocial ? "" : "mt-6"}>
+        <label className="label" htmlFor="email-code">
+          Email
         </label>
         <input
-          id="phone"
-          name="phone"
-          type="tel"
-          autoComplete="tel"
-          inputMode="tel"
-          placeholder="+44 7700 900123"
+          id="email-code"
+          name="email"
+          type="email"
+          autoComplete="email"
+          placeholder="you@example.com"
           className="input input-boxed"
           required
         />
 
-        {phoneState.error && (
-          <p className="mt-2 text-sm text-[var(--color-danger)]">{phoneState.error}</p>
+        {emailState.error && (
+          <p className="mt-2 text-sm text-[var(--color-danger)]">{emailState.error}</p>
         )}
 
         <SubmitButton className="btn btn-aurora mt-3 w-full py-3">
-          Text me a code
+          Email me a code
         </SubmitButton>
       </form>
+
+      {providers.phone && (
+        <form action={phoneAction} className="mt-4">
+          <label className="label" htmlFor="phone">
+            Or your phone number
+          </label>
+          <input
+            id="phone"
+            name="phone"
+            type="tel"
+            autoComplete="tel"
+            inputMode="tel"
+            placeholder="+44 7700 900123"
+            className="input input-boxed"
+            required
+          />
+
+          {phoneState.error && (
+            <p className="mt-2 text-sm text-[var(--color-danger)]">{phoneState.error}</p>
+          )}
+
+          <SubmitButton className="btn btn-secondary mt-3 w-full py-3">
+            Text me a code
+          </SubmitButton>
+        </form>
+      )}
 
       <div className="mt-6 border-t border-[var(--color-border)] pt-5">
         {!showEmail ? (
@@ -288,7 +355,7 @@ export function SignInPanel({
       </div>
 
       <p className="mt-6 text-center text-xs leading-relaxed text-[var(--color-ink-faint)]">
-        We only ever text you a sign-in code. Standard message rates apply.
+        We only ever send you a sign-in code. Nothing else.
       </p>
     </div>
   );

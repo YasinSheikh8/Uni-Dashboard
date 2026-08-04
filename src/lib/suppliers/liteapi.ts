@@ -121,6 +121,18 @@ export class LiteApiProvider implements RateProvider {
     const nights = nightsBetween(query.checkIn, query.checkOut);
     const limit = query.limit ?? 40;
 
+    // LiteAPI accepts hotelIds, cityName + countryCode, coordinates, a placeId
+    // or an IATA code. A city on its own is NOT a location and the request is
+    // rejected — so say that plainly here rather than letting it come back as
+    // an opaque HTTP error further down.
+    const hasCoordinates = query.latitude != null && query.longitude != null;
+    if (!hasCoordinates && !query.countryCode) {
+      throw new Error(
+        `Need a country for "${query.destination}" — LiteAPI requires city and ` +
+          "country together. Try \"Lisbon, PT\".",
+      );
+    }
+
     const locationParams = new URLSearchParams({ limit: String(limit) });
     if (query.countryCode) locationParams.set("countryCode", query.countryCode);
     if (query.destination) locationParams.set("cityName", query.destination);
