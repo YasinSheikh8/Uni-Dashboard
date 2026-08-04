@@ -254,6 +254,31 @@ for (const source of SUPPLIER_SOURCES) {
   if (problem) warnings.push(problem);
 }
 
+/*
+ * Resend's shared sender only delivers to the address that owns the Resend
+ * account. It is the right thing to test with and the wrong thing to launch
+ * with: sign-in looks perfect to you and silently delivers nothing to anyone
+ * else. That failure is invisible — no error, no bounce, just users who never
+ * get a code — so it is worth naming here rather than discovering in support.
+ */
+const emailFrom = process.env.EMAIL_FROM?.trim();
+if (emailFrom && /@resend\.dev\b/i.test(emailFrom)) {
+  warnings.push(
+    "EMAIL_FROM uses Resend's shared onboarding@resend.dev sender.\n" +
+      "   That address ONLY delivers to the email that owns your Resend account.\n" +
+      "   Fine for testing; every other user will silently receive nothing.\n" +
+      "   Verify a domain at resend.com/domains and send from it before launch.",
+  );
+}
+
+if (process.env.RESEND_API_KEY?.trim() && !emailFrom) {
+  warnings.push(
+    "RESEND_API_KEY is set but EMAIL_FROM is not — Resend rejects a send with no\n" +
+      "   sender, so sign-in codes will fail. Set EMAIL_FROM, e.g.\n" +
+      '   "BKR <login@yourdomain.com>".',
+  );
+}
+
 if (supplierCount === 0) {
   warnings.push(
     "No supplier credentials — the app will serve built-in demo hotels rather than real, bookable rates.\n" +
