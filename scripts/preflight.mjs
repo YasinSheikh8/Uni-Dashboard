@@ -47,7 +47,7 @@ const RECOMMENDED = [
   {
     name: "NEXT_PUBLIC_APP_URL",
     why: "Used for absolute links and as the settlement function's fallback origin.",
-    fix: "Set it to the deployed origin, e.g. https://your-site.netlify.app",
+    fix: "Set it to the deployed origin, e.g. https://your-project.vercel.app",
   },
   {
     name: "STRIPE_SECRET_KEY",
@@ -61,7 +61,41 @@ const RECOMMENDED = [
   },
 ];
 
-const SUPPLIERS = ["LITEAPI_KEY", "AMADEUS_CLIENT_ID", "AMADEUS_CLIENT_SECRET"];
+/**
+ * Rate suppliers, reported individually.
+ *
+ * A combined "0/3 set" line was genuinely confusing: it could not tell you
+ * WHICH supplier was missing, so "LiteAPI isn't connected" and "Amadeus isn't
+ * connected" looked identical. Each supplier is now named, and its key is
+ * sanity-checked for shape — a key pasted into the wrong variable is the most
+ * likely reason a supplier appears disconnected while you are certain you set it.
+ */
+const SUPPLIER_SOURCES = [
+  {
+    label: "LiteAPI",
+    vars: ["LITEAPI_KEY"],
+    // LiteAPI issues sandbox keys as sand_… and live keys as prod_….
+    check(env) {
+      const key = env.LITEAPI_KEY?.trim();
+      if (!key) return null;
+      if (!/^(sand|prod)_/i.test(key)) {
+        return (
+          "LITEAPI_KEY does not start with sand_ or prod_. LiteAPI sandbox keys " +
+          "begin with sand_ and live keys with prod_, so this may be a key for a " +
+          "different service pasted into the wrong variable."
+        );
+      }
+      return null;
+    },
+  },
+  {
+    label: "Amadeus",
+    vars: ["AMADEUS_CLIENT_ID", "AMADEUS_CLIENT_SECRET"],
+    check: () => null,
+  },
+];
+
+const SUPPLIERS = SUPPLIER_SOURCES.flatMap((source) => source.vars);
 
 /**
  * Sign-in providers. None is required — the app always offers email/password,
@@ -172,10 +206,14 @@ for (const entry of RECOMMENDED) {
 }
 
 const supplierCount = SUPPLIERS.filter(set).length;
-console.log(
-  ` ${supplierCount > 0 ? "✓" : "·"} supplier credentials ` +
-    `(${supplierCount}/${SUPPLIERS.length} set)`,
-);
+for (const source of SUPPLIER_SOURCES) {
+  const have = source.vars.filter(set).length;
+  const mark = have === source.vars.length ? "✓" : have === 0 ? "·" : "!";
+  console.log(
+    ` ${mark} ${source.label} rate feed` +
+      (source.vars.length > 1 ? ` (${have}/${source.vars.length})` : ""),
+  );
+}
 
 for (const method of SIGN_IN_METHODS) {
   const have = method.vars.filter(set).length;
@@ -206,10 +244,27 @@ for (const method of SIGN_IN_METHODS) {
   }
 }
 
+// Shape problems in a key that IS set — the "but I already added it" case.
+for (const source of SUPPLIER_SOURCES) {
+  const problem = source.check(process.env);
+  if (problem) warnings.push(problem);
+}
+
 if (supplierCount === 0) {
   warnings.push(
     "No supplier credentials — the app will serve built-in demo hotels rather than real, bookable rates.\n" +
+      "   LiteAPI needs LITEAPI_KEY; Amadeus needs AMADEUS_CLIENT_ID and AMADEUS_CLIENT_SECRET.\n" +
       "   Free instant keys: https://dashboard.liteapi.travel and https://developers.amadeus.com",
+  );
+} else if (supplierCount < SUPPLIERS.length) {
+  const missing = SUPPLIER_SOURCES.filter((source) => !source.vars.every(set)).map(
+    (source) => source.label,
+  );
+  warnings.push(
+    `Only some rate feeds are configured — ${missing.join(", ")} ${
+      missing.length === 1 ? "is" : "are"
+    } not set.\n` +
+      "   Best-price comparison needs at least two feeds; with one there is nothing to compare against.",
   );
 }
 
