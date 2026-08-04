@@ -187,8 +187,17 @@ Three things worth knowing:
    serverless it is wiped on cold start and cannot be shared between concurrent
    lambdas. Set `DATABASE_URL` to a Postgres connection string (Neon and Supabase
    both have free tiers) and `scripts/prepare-db-provider.mjs` rewrites the
-   Prisma datasource at build time, so there is still only one schema file. Run
-   `npx prisma db push` against the production URL once before first deploy.
+   Prisma datasource at build time, so there is still only one schema file. The
+   build runs `prisma db push`, so a fresh database gets its tables on first
+   deploy.
+
+   **Set `DIRECT_URL` too.** Neon and Supabase hand you a *pooled* connection
+   string by default (a `-pooler` host on Neon, port 6543 on Supabase), and
+   PgBouncer cannot run DDL reliably — a schema push against it hangs or
+   half-applies. `DIRECT_URL` should be the unpooled string; the build wires it
+   into the datasource as `directUrl` so migrations go direct while runtime
+   queries stay pooled. The build warns loudly if you set a Postgres
+   `DATABASE_URL` without it.
 2. **Settlement runs as a scheduled function.**
    `netlify/functions/settle-cron.mts` fires hourly and calls
    `POST /api/cron/settle`, guarded by a `CRON_SECRET` bearer token compared in
@@ -202,9 +211,9 @@ Do not set `NODE_ENV` in `netlify.toml`. Forcing it to `production` makes npm
 skip devDependencies, which removes the build toolchain and breaks the
 production context while leaving deploy previews green.
 
-Required environment variables in Netlify: `DATABASE_URL`, `SESSION_SECRET`,
-`CRON_SECRET`, `NEXT_PUBLIC_APP_URL`, plus whichever supplier and Stripe keys
-you are using.
+Required environment variables in Netlify: `DATABASE_URL`, `DIRECT_URL`,
+`SESSION_SECRET`, `CRON_SECRET`, `NEXT_PUBLIC_APP_URL`, plus whichever supplier
+and Stripe keys you are using.
 
 ---
 
