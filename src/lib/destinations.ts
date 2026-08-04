@@ -119,6 +119,45 @@ const CITY_COUNTRIES: Record<string, string> = {
   "tel aviv": "IL", jerusalem: "IL",
 };
 
+/**
+ * Canonical display name per country code.
+ *
+ * Separate from COUNTRY_NAMES because that map is many-to-one — "uk", "england"
+ * and "scotland" all resolve to GB — and a suggestion needs exactly one label.
+ */
+const CODE_NAMES: Record<string, string> = {
+  PT: "Portugal", ES: "Spain", FR: "France", IT: "Italy", DE: "Germany",
+  NL: "Netherlands", BE: "Belgium", AT: "Austria", CH: "Switzerland",
+  CZ: "Czech Republic", PL: "Poland", HU: "Hungary", GR: "Greece",
+  HR: "Croatia", IE: "Ireland", DK: "Denmark", SE: "Sweden", NO: "Norway",
+  FI: "Finland", IS: "Iceland", TR: "Turkey", GB: "United Kingdom",
+  US: "United States", CA: "Canada", MX: "Mexico", BR: "Brazil",
+  AR: "Argentina", CL: "Chile", CO: "Colombia", PE: "Peru", JP: "Japan",
+  CN: "China", HK: "Hong Kong", SG: "Singapore", TH: "Thailand",
+  VN: "Vietnam", ID: "Indonesia", MY: "Malaysia", PH: "Philippines",
+  KR: "South Korea", IN: "India", AU: "Australia", NZ: "New Zealand",
+  ZA: "South Africa", EG: "Egypt", MA: "Morocco",
+  AE: "United Arab Emirates", SA: "Saudi Arabia", QA: "Qatar", IL: "Israel",
+};
+
+export function countryName(code: string): string {
+  return CODE_NAMES[code.toUpperCase()] ?? code.toUpperCase();
+}
+
+/** Strips accents so "munchen" finds "münchen". */
+function fold(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+/** Title-cases a lookup key back into something presentable. */
+function titleCase(value: string): string {
+  return value.replace(/(^|[\s-])\w/g, (char) => char.toUpperCase());
+}
+
 /** Uppercase ISO alpha-2 codes, so "PT" in the input is recognised as a country. */
 const ISO_CODES = new Set(Object.values(COUNTRY_NAMES));
 
@@ -152,16 +191,99 @@ export function resolveDestination(input: string): ResolvedDestination {
   return { city: cityOnly, source: "unresolved" };
 }
 
-/** Suggestions shown when we cannot resolve a country. */
-export function suggestionsFor(input: string): string[] {
-  const needle = input.trim().toLowerCase();
+/**
+ * Alternate spellings, mapped to the entry they should DISPLAY as.
+ *
+ * These still match while typing — "munch" and "münchen" both need to find
+ * Munich — but they collapse onto one row. Offering both "Lisboa, Portugal" and
+ * "Lisbon, Portugal" reads as a choice between two places when it is one.
+ *
+ * The canonical side is the form that is easiest to type and clearest in
+ * English, since that is what people are typing when they see the list.
+ */
+const ALIASES: Record<string, string> = {
+  lisboa: "lisbon",
+  sevilla: "seville",
+  roma: "rome",
+  milano: "milan",
+  venezia: "venice",
+  firenze: "florence",
+  napoli: "naples",
+  "münchen": "munich",
+  "köln": "cologne",
+  "düsseldorf": "dusseldorf",
+  praha: "prague",
+  "kraków": "krakow",
+  "reykjavík": "reykjavik",
+  "cancún": "cancun",
+  "são paulo": "sao paulo",
+  "bogotá": "bogota",
+  "medellín": "medellin",
+  marrakesh: "marrakech",
+};
+
+export interface DestinationSuggestion {
+  /** What to show, e.g. "Lisbon, Portugal". */
+  label: string;
+  /**
+   * What to put in the input when chosen, e.g. "Lisbon, PT".
+   *
+   * Deliberately the ISO form rather than the display label: it round-trips
+   * through resolveDestination unambiguously, so the supplier always receives a
+   * complete location. This is the whole point of the suggestion list — it stops
+   * a bare city reaching an API that will reject it.
+   */
+  value: string;
+  city: string;
+  countryCode: string;
+}
+
+/**
+ * Ranked destination suggestions.
+ *
+ * Prefix matches first (typing "lis" should surface Lisbon before Ibiza), then
+ * substring matches, each alphabetical so the order is stable while typing.
+ * Accent-folded, so "munchen" finds "München".
+ */
+export function suggestDestinations(
+  input: string,
+  limit = 6,
+): DestinationSuggestion[] {
+  const needle = fold(input);
   if (needle.length < 2) return [];
 
-  return Object.keys(CITY_COUNTRIES)
-    .filter((city) => city.startsWith(needle))
-    .slice(0, 5)
-    .map((city) => {
-      const titled = city.replace(/(^|\s)\w/g, (char) => char.toUpperCase());
-      return `${titled}, ${CITY_COUNTRIES[city]}`;
+  const prefix: string[] = [];
+  const contains: string[] = [];
+
+  for (const key of Object.keys(CITY_COUNTRIES)) {
+    const folded = fold(key);
+    // An alias matches, then displays as the entry it points at.
+    const display = ALIASES[key] ?? key;
+    if (folded.startsWith(needle)) prefix.push(display);
+    else if (folded.includes(needle)) contains.push(display);
+  }
+
+  const seen = new Set<string>();
+  return [...prefix.sort(), ...contains.sort()]
+    .filter((key) => {
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, limit)
+    .map((key) => {
+      const code = CITY_COUNTRIES[key];
+      const city = titleCase(key);
+      return {
+        label: `${city}, ${countryName(code)}`,
+        value: `${city}, ${code}`,
+        city,
+        countryCode: code,
+      };
     });
+}
+
+/** Back-compat string form, used by older callers and tests. */
+export function suggestionsFor(input: string): string[] {
+  return suggestDestinations(input, 5).map((entry) => entry.value);
 }

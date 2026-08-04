@@ -85,9 +85,12 @@ async function Results({
     <>
       <div className="mt-12 flex flex-wrap items-end justify-between gap-4">
         <div>
+          {/* The resolved city, not the raw input — otherwise picking a
+              suggestion shows "8 stays in Lisbon, PT" and leaks an ISO code
+              at the user. */}
           <h1 className="display text-[1.75rem]">
             {result.hotels.length} stay{result.hotels.length === 1 ? "" : "s"} in{" "}
-            {query.destination}
+            {result.resolvedCity || query.destination}
           </h1>
           {/* Source count, not source telemetry. Response times are a developer
               concern and belong in the disclosure below, not in the headline. */}
@@ -97,8 +100,9 @@ async function Results({
           </p>
           {!result.resolvedCountryCode && result.hotels.length === 0 && (
             <p className="mt-2 text-sm text-[var(--color-warn)]">
-              We couldn&apos;t tell which country {query.destination} is in. Try
-              adding it, like &ldquo;{query.destination}, PT&rdquo;.
+              We couldn&apos;t tell which country {result.resolvedCity || query.destination}{" "}
+              is in. Pick from the suggestions, or add it yourself like
+              &ldquo;{result.resolvedCity || query.destination}, PT&rdquo;.
             </p>
           )}
         </div>
