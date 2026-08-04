@@ -1,0 +1,28 @@
+[build]
+  # prepare-db-provider flips prisma's datasource to match DATABASE_URL, so the
+  # same schema serves SQLite locally and Postgres in production.
+  command = "npm run build"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "22"
+  # Prisma's query engine has to be built for the Lambda runtime as well as the
+  # build machine, or the deployed functions cannot open a connection.
+  PRISMA_CLI_BINARY_TARGETS = "native,rhel-openssl-3.0.x"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+# Settlement is driven by a scheduled function that pokes /api/cron/settle.
+# The schedule lives in netlify/functions/settle-cron.mts next to the code.
+
+[context.production.environment]
+  NODE_ENV = "production"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "geolocation=(), microphone=(), camera=()"

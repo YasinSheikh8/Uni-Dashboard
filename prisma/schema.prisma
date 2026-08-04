@@ -1,0 +1,183 @@
+// Hotelbook data model.
+//
+// Provider is SQLite so the app runs locally with zero setup. Nothing here uses
+// SQLite-only features — swap the provider to "postgresql" and every model
+// migrates as-is. JSON payloads are stored as String for the same reason.
+//
+// All money is stored in minor units (cents) as Int. Never floats.
+
+generator client {
+  provider = "prisma-client-js"
+  // "native" builds for the machine running `prisma generate`;
+  // rhel-openssl-3.0.x is what Netlify/Vercel lambdas actually run on.
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  avatarColor  String   @default("#1f6feb")
+  createdAt    DateTime @default(now())
+
+  // Stripe customer, created lazily the first time a card is saved.
+  stripeCustomerId String? @unique
+
+  profile        TravelerProfile?
+  paymentMethods PaymentMethod[]
+
+  organizedBookings Booking[]            @relation("BookingOrganizer")
+  participations    BookingParticipant[]
+
+  friendshipsInitiated Friendship[] @relation("FriendshipRequester")
+  friendshipsReceived  Friendship[] @relation("FriendshipAddressee")
+}
+
+/// Everything needed to fire a booking without asking the user anything.
+/// A complete profile is what makes one-tap booking possible.
+model TravelerProfile {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  firstName   String
+  lastName    String
+  phone       String
+  dateOfBirth DateTime?
+  nationality String?
+
+  addressLine1 String?
+  addressCity  String?
+  addressZip   String?
+  addressCountry String?
+
+  updatedAt DateTime @updatedAt
+}
+
+model PaymentMethod {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  stripePaymentMethodId String  @unique
+  brand                 String
+  last4                 String
+  expMonth              Int
+  expYear               Int
+  isDefault             Boolean @default(false)
+  createdAt             DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Friendship {
+  id String @id @default(cuid())
+
+  requesterId String
+  requester   User   @relation("FriendshipRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+
+  addresseeId String
+  addressee   User   @relation("FriendshipAddressee", fields: [addresseeId], references: [id], onDelete: Cascade)
+
+  /// pending | accepted
+  status    String   @default("pending")
+  createdAt DateTime @default(now())
+
+  @@unique([requesterId, addresseeId])
+  @@index([addresseeId])
+}
+
+model Booking {
+  id String @id @default(cuid())
+
+  organizerId String
+  organizer   User   @relation("BookingOrganizer", fields: [organizerId], references: [id])
+
+  /// pending_payment | confirmed | settling | settled | cancelled | failed
+  status String @default("pending_payment")
+
+  // ---- What was booked -------------------------------------------------
+  supplier        String // liteapi | amadeus | fixture
+  supplierHotelId String
+  supplierRateId  String
+  supplierBookingRef String?
+  confirmationCode   String?
+
+  hotelName     String
+  hotelAddress  String
+  hotelCity     String
+  hotelCountry  String
+  hotelImageUrl String?
+  hotelRating   Float?
+  roomName      String
+
+  checkIn  DateTime
+  checkOut DateTime
+  nights   Int
+  guests   Int
+  rooms    Int @default(1)
+
+  // ---- Money (minor units) ---------------------------------------------
+  currency    String
+  totalAmount Int
+
+  /// JSON snapshot of every supplier quote we saw for this hotel at search
+  /// time, so we can show "we checked N suppliers, this was the cheapest".
+  priceComparison String?
+
+  /// Amount the cheapest rejected competing quote came in at, if any.
+  savedAmount Int?
+
+  // ---- Hybrid split settlement ----------------------------------------
+  /// Organizer's backstop authorization covering all friends' shares. This is
+  /// what guarantees the booking the instant it is made.
+  backstopPaymentIntentId String?
+  backstopAmount          Int     @default(0)
+  /// none | authorized | captured | released | failed
+  backstopStatus          String  @default("none")
+
+  settlementDeadline DateTime?
+  settledAt          DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  participants BookingParticipant[]
+
+  @@index([organizerId])
+  @@index([status])
+}
+
+model BookingParticipant {
+  id        String  @id @default(cuid())
+  bookingId String
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  /// Null until an invited-by-email friend signs up.
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id])
+
+  email String
+  name  String?
+
+  /// organizer | friend
+  role String @default("friend")
+
+  shareAmount Int
+
+  /// pending | authorized | captured | declined | failed | covered_by_organizer
+  status String @default("pending")
+
+  stripePaymentIntentId String?
+  respondedAt           DateTime?
+  createdAt             DateTime @default(now())
+
+  @@unique([bookingId, email])
+  @@index([userId])
+}
