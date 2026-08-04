@@ -85,8 +85,10 @@ async function runSupplier(
 export async function searchHotels(
   query: SearchQuery,
   sort: SortMode = "best_price",
+  /** Test seam. Defaults to the configured registry. */
+  providerOverride?: RateProvider[],
 ): Promise<AggregatedSearchResult> {
-  const providers = getProviders();
+  const providers = providerOverride ?? getProviders();
 
   const runs = await Promise.all(
     providers.map((provider) => runSupplier(provider, query)),
@@ -121,15 +123,29 @@ export async function searchHotels(
         supplierHotelId: offer.hotel.supplierHotelId,
         rate: cheapest,
         comparableAmount: amount,
+        bookable: cheapest.bookable,
+        deepLinkUrl: cheapest.deepLinkUrl,
       });
     }
 
     if (quotes.length === 0) continue;
     quotes.sort((a, b) => a.comparableAmount - b.comparableAmount);
 
-    const best = quotes[0];
-    const runnerUp = quotes[1];
-    const savedAmount = runnerUp ? runnerUp.comparableAmount - best.comparableAmount : 0;
+    // The winner is the cheapest rate we can actually SELL. A scraped price
+    // that undercuts it is real information, but it is not a booking — letting
+    // it win here would hand the booking engine a rate with no token behind it.
+    const bookableQuotes = quotes.filter((quote) => quote.bookable);
+    const best = bookableQuotes[0] ?? null;
+    const runnerUp = bookableQuotes[1];
+    const savedAmount =
+      best && runnerUp ? runnerUp.comparableAmount - best.comparableAmount : 0;
+
+    // Cheapest reference quote that undercuts what we can sell.
+    const cheaperElsewhere =
+      quotes.find(
+        (quote) =>
+          !quote.bookable && (best === null || quote.comparableAmount < best.comparableAmount),
+      ) ?? null;
 
     // Merge metadata across suppliers: prefer whichever record is richest,
     // since Amadeus has no photography and LiteAPI has no IATA context.
@@ -140,7 +156,7 @@ export async function searchHotels(
     );
     const withReviews = identities.find((identity) => identity.reviewScore != null);
     const primary =
-      identities.find((identity) => identity.supplier === best.supplier) ?? identities[0];
+      identities.find((identity) => identity.supplier === best?.supplier) ?? identities[0];
 
     hotels.push({
       id: clusterId(primary),
@@ -158,8 +174,9 @@ export async function searchHotels(
       best,
       quotes,
       savedAmount,
+      cheaperElsewhere,
       currency: query.currency,
-      nights: best.rate.nights,
+      nights: best?.rate.nights ?? quotes[0].rate.nights,
     });
   }
 
@@ -184,9 +201,15 @@ function sortHotels(hotels: AggregatedHotel[], sort: SortMode): void {
       break;
     case "best_price":
     default:
-      hotels.sort((a, b) => a.best.comparableAmount - b.best.comparableAmount);
+      // Referral-only rows sort on their reference price so they still land in
+      // a sensible place rather than all collapsing to the bottom.
+      hotels.sort((a, b) => priceOf(a) - priceOf(b));
       break;
   }
+}
+
+function priceOf(hotel: AggregatedHotel): number {
+  return hotel.best?.comparableAmount ?? hotel.quotes[0]?.comparableAmount ?? Infinity;
 }
 
 /**
@@ -203,11 +226,12 @@ export function buildPriceComparison(hotel: AggregatedHotel): string {
       label: quote.supplierLabel,
       room: quote.rate.roomName,
       refundable: quote.rate.refundable,
+      bookable: quote.bookable,
       total: quote.comparableAmount,
       nativeTotal: quote.rate.totalAmount,
       nativeCurrency: quote.rate.currency,
     })),
-    winner: hotel.best.supplier,
+    winner: hotel.best?.supplier ?? null,
     savedAmount: hotel.savedAmount,
   });
 }

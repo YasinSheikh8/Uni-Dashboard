@@ -72,6 +72,7 @@ let cachedToken: { value: string; expiresAt: number } | null = null;
 export class AmadeusProvider implements RateProvider {
   readonly id = SUPPLIER_ID;
   readonly label = "Amadeus";
+  readonly bookable = true;
 
   private readonly clientId = process.env.AMADEUS_CLIENT_ID ?? "";
   private readonly clientSecret = process.env.AMADEUS_CLIENT_SECRET ?? "";
@@ -233,6 +234,7 @@ export class AmadeusProvider implements RateProvider {
             totalAmount: toMinorUnits(total, currency),
             taxesAndFees: toMinorUnits(taxes, currency),
             nights,
+            bookable: true,
           });
         }
 

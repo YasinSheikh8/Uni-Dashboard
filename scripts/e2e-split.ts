@@ -24,9 +24,34 @@ import { hashPassword } from "../src/lib/auth";
 
 type User = NonNullable<Awaited<ReturnType<typeof getCurrentUser>>>;
 
-async function makeUser(email: string, name: string, withCard: boolean): Promise<User> {
-  await prisma.user.deleteMany({ where: { email } });
+const TEST_EMAILS = ["organizer@test.local", "payer@test.local", "ghost@test.local"];
 
+/**
+ * Clears anything a previous run left behind, in dependency order. Bookings
+ * hold a foreign key on the organizer, so users cannot be deleted first.
+ */
+async function resetFixtures(): Promise<void> {
+  const users = await prisma.user.findMany({
+    where: { email: { in: TEST_EMAILS } },
+    select: { id: true },
+  });
+  const userIds = users.map((user) => user.id);
+  if (userIds.length === 0) return;
+
+  const bookings = await prisma.booking.findMany({
+    where: { organizerId: { in: userIds } },
+    select: { id: true },
+  });
+  const bookingIds = bookings.map((booking) => booking.id);
+
+  await prisma.bookingParticipant.deleteMany({
+    where: { OR: [{ bookingId: { in: bookingIds } }, { userId: { in: userIds } }] },
+  });
+  await prisma.booking.deleteMany({ where: { id: { in: bookingIds } } });
+  await prisma.user.deleteMany({ where: { id: { in: userIds } } });
+}
+
+async function makeUser(email: string, name: string, withCard: boolean): Promise<User> {
   const user = await prisma.user.create({
     data: {
       email,
@@ -58,6 +83,8 @@ async function makeUser(email: string, name: string, withCard: boolean): Promise
 }
 
 async function main() {
+  await resetFixtures();
+
   const organizer = await makeUser("organizer@test.local", "Ana", true);
   const payer = await makeUser("payer@test.local", "Bruno", true);
   const ghost = await makeUser("ghost@test.local", "Cleo", true);

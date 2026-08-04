@@ -171,6 +171,15 @@ export async function createBooking(
     const provider = getProvider(offer.supplier);
     if (!provider) throw new BookingError(`Unknown supplier: ${offer.supplier}`);
 
+    // Belt and braces. The aggregator already refuses to make a non-bookable
+    // quote the winner, but a crafted request could name a scrape source
+    // directly, and a scraped price has no rate token to sell against.
+    if (!provider.bookable) {
+      throw new BookingError(
+        `${provider.label} is a price-reference source and cannot be booked`,
+      );
+    }
+
     const result = await provider.book({
       supplierRateId: offer.supplierRateId,
       supplierHotelId: offer.supplierHotelId,

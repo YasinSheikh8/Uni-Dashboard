@@ -70,12 +70,31 @@ export default async function BookPage({
     );
   }
 
-  // The quote the user clicked, if it survived the re-price.
+  // The quote the user clicked, if it survived the re-price. Only bookable
+  // quotes are eligible — a reference price has no rate to sell.
   const clicked = hotel.quotes.find(
     (quote) =>
-      quote.supplier === params.supplier && quote.rate.supplierRateId === params.rate,
+      quote.bookable &&
+      quote.supplier === params.supplier &&
+      quote.rate.supplierRateId === params.rate,
   );
   const chosen = clicked ?? hotel.best;
+
+  if (!chosen) {
+    return (
+      <div className="mx-auto max-w-2xl px-5 py-16 text-center">
+        <h1 className="text-xl font-semibold">We can&apos;t book this one</h1>
+        <p className="mt-2 text-sm text-[var(--color-ink-soft)]">
+          Every price we found for {hotel.name} came from a reference source we
+          can only link to, not sell.
+        </p>
+        <Link href="/search" className="btn btn-primary mt-6">
+          Back to results
+        </Link>
+      </div>
+    );
+  }
+
   const priceChanged = Boolean(clicked) === false;
 
   const friends = await prisma.friendship.findMany({
@@ -151,6 +170,9 @@ export default async function BookPage({
                     <td className="py-2.5">
                       {quote.supplierLabel}
                       {winner && <span className="pill pill-save ml-2">Booking this</span>}
+                      {!quote.bookable && (
+                        <span className="pill pill-muted ml-2">reference only</span>
+                      )}
                     </td>
                     <td className="py-2.5 text-xs text-[var(--color-ink-faint)]">
                       {quote.rate.roomName}
@@ -167,6 +189,13 @@ export default async function BookPage({
             <p className="mt-3 text-xs text-[var(--color-save)]">
               {formatMoney(hotel.savedAmount, hotel.currency)} cheaper than the next
               supplier for this exact hotel.
+            </p>
+          )}
+          {hotel.cheaperElsewhere && (
+            <p className="mt-2 text-xs text-[var(--color-warn)]">
+              {hotel.cheaperElsewhere.supplierLabel} lists this hotel at{" "}
+              {formatMoney(hotel.cheaperElsewhere.comparableAmount, hotel.currency)}. We
+              can&apos;t book that rate — it is a listed price, not one of our suppliers.
             </p>
           )}
         </div>

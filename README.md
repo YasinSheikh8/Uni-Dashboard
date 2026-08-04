@@ -123,6 +123,77 @@ Split arithmetic uses largest-remainder allocation, so shares are always
 integers that sum to exactly the total. Naive rounding leaves you a cent short
 on the charge, which reconciles into a real bug.
 
+
+---
+
+## Price-reference scraping
+
+Off by default. `SCRAPER_ENABLED=true` plus `SCRAPER_TARGETS=booking,hotels`
+adds public listing prices to the comparison.
+
+**Scraped prices are reference only and can never be booked.** There is no rate
+token behind a number lifted off a search page, so:
+
+- the aggregator picks the winner from *bookable* quotes only — a cheaper
+  scraped price never becomes the thing you buy;
+- `savedAmount` is computed against bookable sources only, so we never claim a
+  saving over something we cannot sell;
+- when a reference price undercuts our bookable rate, the UI says so and links
+  out (`cheaperElsewhere`), rather than hiding it or quietly showing a price
+  that would fail at checkout;
+- a hotel *only* a reference source has renders as a referral row with no
+  Select button;
+- `createBooking` rejects a non-bookable provider outright, so a hand-crafted
+  request cannot route around the above.
+
+What the scraper does technically: reads schema.org JSON-LD — the structured
+data sites publish for search engines — rather than pattern-matching rendered
+markup, which survives redesigns far better. Per target it fetches and honours
+robots.txt (**fail-closed**: unreadable robots.txt means no fetch), serializes
+requests per host with a minimum gap that yields to the site's own
+`Crawl-delay`, caches results, and sends an identifiable User-Agent.
+
+Be clear-eyed about it: scraping a booking site's search results is very likely
+against its terms of service however politely it is done, the markup can change
+without notice, and the prices are not transactable. Good crawler hygiene makes
+this well-behaved, not permitted. Treat it as a signal for your own pricing.
+
+Adding a target is a `buildUrl` function in `TARGETS`
+(`src/lib/suppliers/scraper/provider.ts`).
+
+---
+
+## Deploying to Netlify
+
+```bash
+netlify init            # or connect the repo in the Netlify UI
+netlify env:import .env # then edit real values in the dashboard
+netlify deploy --build --prod
+```
+
+`netlify.toml` wires the Next.js runtime plugin, the Node version, and the
+Prisma binary target for the Lambda runtime.
+
+Three things worth knowing:
+
+1. **Postgres is required in production.** SQLite is a local file — on
+   serverless it is wiped on cold start and cannot be shared between concurrent
+   lambdas. Set `DATABASE_URL` to a Postgres connection string (Neon and Supabase
+   both have free tiers) and `scripts/prepare-db-provider.mjs` rewrites the
+   Prisma datasource at build time, so there is still only one schema file. Run
+   `npx prisma db push` against the production URL once before first deploy.
+2. **Settlement runs as a scheduled function.**
+   `netlify/functions/settle-cron.mts` fires hourly and calls
+   `POST /api/cron/settle`, guarded by a `CRON_SECRET` bearer token compared in
+   constant time. The endpoint refuses to run if the secret is unset. Without
+   this schedule, card authorizations expire and the money is uncollectible.
+3. **Set `NEXT_PUBLIC_APP_URL` to the deployed origin**, or the Stripe Checkout
+   return leg will bounce back to localhost.
+
+Required environment variables in Netlify: `DATABASE_URL`, `SESSION_SECRET`,
+`CRON_SECRET`, `NEXT_PUBLIC_APP_URL`, plus whichever supplier and Stripe keys
+you are using.
+
 ---
 
 ## Layout
@@ -135,15 +206,21 @@ src/lib/suppliers/     rate sources and the aggregation engine
   fixture.ts           deterministic demo suppliers
   match.ts             cross-supplier property matching
   aggregator.ts        parallel fan-out, dedup, best-price selection
+  scraper/             price-reference scraping (off by default)
+    robots.ts          robots.txt fetch/parse/evaluate, fail-closed
+    throttle.ts        per-host request pacing
+    jsonld.ts          schema.org extraction
+    provider.ts        targets + the non-bookable RateProvider
 src/lib/
   booking.ts           booking engine: hold → sell → capture
   split.ts             share computation and the settlement state machine
   payments.ts          Stripe gateway + development stub behind one interface
   money.ts             minor units, largest-remainder splitting
 src/app/               Next.js App Router pages and API routes
-tests/                 money and matching invariants
+tests/                 money, matching, scraping and aggregation invariants
 scripts/settle.ts      settlement sweep (run on a schedule)
 scripts/e2e-split.ts   end-to-end walk of the whole money path
+netlify/functions/     hourly settlement trigger
 ```
 
 ## Commands
@@ -169,8 +246,9 @@ quotes come back.
 ## Status and known gaps
 
 Verified working: supplier fan-out, cross-supplier matching, best-price
-selection, the full booking flow, and the complete split money path including
-partial backstop capture and settlement idempotency (`npm run e2e`).
+selection, the full booking flow, the complete split money path including
+partial backstop capture and settlement idempotency (`npm run e2e`), and the
+scraper's robots handling, JSON-LD extraction and never-bookable guarantees.
 
 Not yet done, in rough priority order:
 
@@ -178,8 +256,9 @@ Not yet done, in rough priority order:
   They are written to the documented request/response shapes and parse
   defensively, but nobody has pointed them at a real key yet. Expect to adjust
   field paths on first contact.
-- Postgres. The schema is provider-agnostic and uses no SQLite-only features —
-  change the `datasource` provider and it migrates as-is.
+- **The scrape targets' URL templates and JSON-LD assumptions are unverified
+  against the live sites** for the same reason — extraction is tested against
+  fixtures, not against Booking.com's actual HTML.
 - Notifications. Friends currently have to open the app to see a share request;
   it should reach them by push or email.
 - Stripe webhooks. Authorizations can fail asynchronously, and nothing currently

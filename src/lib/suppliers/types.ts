@@ -62,6 +62,14 @@ export interface RateQuote {
   /** Portion of totalAmount that is taxes and fees. Minor units. */
   taxesAndFees: number;
   nights: number;
+  /**
+   * False for quotes we can observe but not sell — scraped prices have no rate
+   * token behind them. The booking engine refuses these outright; they exist to
+   * inform the comparison and to deep-link out.
+   */
+  bookable: boolean;
+  /** Where to send the user for a quote we cannot book ourselves. */
+  deepLinkUrl?: string;
 }
 
 export interface SupplierOffer {
@@ -99,6 +107,11 @@ export interface RateProvider {
   readonly id: SupplierId;
   /** Human-readable, shown in the price-comparison breakdown. */
   readonly label: string;
+  /**
+   * Whether this source can actually sell a room. Price-signal sources
+   * (scrapers) set this false and their `book` implementation throws.
+   */
+  readonly bookable: boolean;
   /** False when required credentials are missing — provider is skipped. */
   isConfigured(): boolean;
   search(query: SearchQuery, signal?: AbortSignal): Promise<SupplierOffer[]>;
@@ -113,6 +126,9 @@ export interface SupplierQuote {
   rate: RateQuote;
   /** totalAmount converted into the search currency, for ranking. */
   comparableAmount: number;
+  /** Mirrors the underlying rate: can we sell this, or only point at it? */
+  bookable: boolean;
+  deepLinkUrl?: string;
 }
 
 /**
@@ -134,15 +150,25 @@ export interface AggregatedHotel {
   imageUrl?: string;
   amenities: string[];
 
-  /** The winning quote — what the user pays. */
-  best: SupplierQuote;
-  /** Every supplier's best quote, cheapest first. Includes `best`. */
+  /**
+   * The cheapest BOOKABLE quote — what the user actually pays. Null when every
+   * source for this hotel is price-signal only, in which case the row is a
+   * referral and the UI links out instead of offering to book.
+   */
+  best: SupplierQuote | null;
+  /** Every source's best quote, cheapest first. Includes `best`. */
   quotes: SupplierQuote[];
   /**
-   * How much cheaper `best` is than the next-cheapest supplier for the same
-   * hotel. Zero when only one supplier had it.
+   * How much cheaper `best` is than the next-cheapest bookable source for the
+   * same hotel. Zero when only one source could sell it.
    */
   savedAmount: number;
+  /**
+   * A non-bookable quote that undercuts `best`. Surfaced honestly rather than
+   * hidden: we cannot sell it, so we say where it is instead of pretending our
+   * price is the lowest anywhere.
+   */
+  cheaperElsewhere: SupplierQuote | null;
   currency: string;
   nights: number;
 }

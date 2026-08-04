@@ -132,6 +132,7 @@ function seeded(input: string, min: number, max: number): number {
 export class FixtureProvider implements RateProvider {
   readonly id: string;
   readonly label: string;
+  readonly bookable = true;
   /** Per-supplier price bias, so the two fixture sources genuinely disagree. */
   private readonly bias: number;
 
@@ -207,6 +208,7 @@ export class FixtureProvider implements RateProvider {
             totalAmount: total,
             taxesAndFees: taxes,
             nights,
+            bookable: true,
           };
         }).sort((a, b) => a.totalAmount - b.totalAmount);
 

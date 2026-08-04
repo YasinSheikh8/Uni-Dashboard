@@ -78,6 +78,7 @@ function first<T>(value: T[] | undefined): T | undefined {
 export class LiteApiProvider implements RateProvider {
   readonly id = SUPPLIER_ID;
   readonly label = "LiteAPI";
+  readonly bookable = true;
 
   private readonly apiKey = process.env.LITEAPI_KEY ?? "";
   private readonly baseUrl =
@@ -202,6 +203,7 @@ export class LiteApiProvider implements RateProvider {
             totalAmount: toMinorUnits(total.amount, total.currency),
             taxesAndFees: toMinorUnits(taxes, total.currency),
             nights,
+            bookable: true,
           });
         }
       }
