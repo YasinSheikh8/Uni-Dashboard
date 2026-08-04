@@ -3,6 +3,7 @@ import "server-only";
 import { createHash, randomInt, timingSafeEqual } from "node:crypto";
 import { prisma } from "./db";
 import { isSmsConfigured, sendSms } from "./sms";
+import { buildCodeMessage } from "./otp-message";
 
 /**
  * Phone sign-in with one-time codes.
@@ -103,7 +104,7 @@ export async function sendPhoneCode(rawPhone: string): Promise<SendCodeResult> {
   });
 
   try {
-    await sendSms(phone, `${code} is your BKR code. It expires in 5 minutes.`);
+    await sendSms(phone, buildCodeMessage(code));
   } catch (error) {
     console.error("SMS send failed:", error);
     return { ok: false, error: "Could not send the code. Try again shortly." };
