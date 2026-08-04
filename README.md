@@ -170,65 +170,37 @@ Adding a target is a `buildUrl` function in `TARGETS`
 
 ---
 
-## Deploying to Netlify
+## Deploying to Vercel
 
-```bash
-netlify init            # or connect the repo in the Netlify UI
-netlify env:import .env # then edit real values in the dashboard
-netlify deploy --build --prod
-```
+1. **vercel.com → Add New → Project → import this repo.** Next.js is detected
+   automatically; no build settings to change.
+2. **Add a Postgres database.** Project → Storage → Neon (or Supabase). The
+   integration sets `DATABASE_URL` for you. If you create the database yourself
+   instead, see the `DIRECT_URL` note below.
+3. **Add the environment variables** under Project → Settings → Environment
+   Variables, then redeploy.
 
-`netlify.toml` wires the Next.js runtime plugin, the Node version, and the
-Prisma binary target for the Lambda runtime.
+Three things specific to this app:
 
-Three things worth knowing:
+- **`DIRECT_URL` is required when `DATABASE_URL` is pooled.** Neon and Supabase
+  both hand you the pooled string by default (a `-pooler` host on Neon, port 6543
+  on Supabase), and connection poolers cannot run DDL — the build's schema push
+  would hang against it. `DIRECT_URL` is the same string unpooled. The build
+  refuses to start if this is wrong, rather than failing halfway through.
 
-1. **Postgres is required in production.** SQLite is a local file — on
-   serverless it is wiped on cold start and cannot be shared between concurrent
-   lambdas. Set `DATABASE_URL` to a Postgres connection string (Neon and Supabase
-   both have free tiers) and `scripts/prepare-db-provider.mjs` rewrites the
-   Prisma datasource at build time, so there is still only one schema file. The
-   build runs `prisma db push`, so a fresh database gets its tables on first
-   deploy.
+- **Settlement runs from `vercel.json`.** The cron hits `/api/cron/settle`, and
+  Vercel automatically sends `Authorization: Bearer $CRON_SECRET` on cron
+  invocations — so setting `CRON_SECRET` is the only wiring needed. The schedule
+  is daily (`0 3 * * *`) because Hobby plans allow one cron per day; that is well
+  inside the ~7-day card-authorization window, but on Pro you can raise it to
+  hourly. Without this schedule running, holds expire uncollected.
 
-   **Set `DIRECT_URL` too.** Neon and Supabase hand you a *pooled* connection
-   string by default (a `-pooler` host on Neon, port 6543 on Supabase), and
-   PgBouncer cannot run DDL reliably — a schema push against it hangs or
-   half-applies. `DIRECT_URL` should be the unpooled string; the build wires it
-   into the datasource as `directUrl` so migrations go direct while runtime
-   queries stay pooled. The build warns loudly if you set a Postgres
-   `DATABASE_URL` without it.
-2. **Settlement runs as a scheduled function.**
-   `netlify/functions/settle-cron.mts` fires hourly and calls
-   `POST /api/cron/settle`, guarded by a `CRON_SECRET` bearer token compared in
-   constant time. The endpoint refuses to run if the secret is unset. Without
-   this schedule, card authorizations expire and the money is uncollectible.
-3. **Set `NEXT_PUBLIC_APP_URL` to the deployed origin.** It is used for absolute
-   links; the settlement function falls back to it when Netlify's own `URL` is
-   unavailable.
+- **Security headers live in `next.config.ts`,** not in a platform config file,
+  so they survive a change of host.
 
-Do not set `NODE_ENV` in `netlify.toml`. Forcing it to `production` makes npm
-skip devDependencies, which removes the build toolchain and breaks the
-production context while leaving deploy previews green.
-
-Required environment variables in Netlify: `DATABASE_URL`, `DIRECT_URL`,
-`SESSION_SECRET`, `CRON_SECRET`, `NEXT_PUBLIC_APP_URL`, plus whichever supplier
-and Stripe keys you are using.
-
-You do not have to remember that list. `npm run build` starts with a preflight
-(`npm run preflight` to run it alone) that prints exactly which variables are
-set, warns about the ones that degrade behaviour, and stops the build with a
-plain-English explanation when something is wrong.
-
-It stops for values that are *present but unusable*, not just missing ones:
-
-- a **pooled** `DATABASE_URL` with no `DIRECT_URL` — Neon and Supabase both hand
-  you the pooled string by default, and the schema push would hang against
-  PgBouncer several steps later;
-- a **SQLite** `DATABASE_URL` on a deploy platform — that build would go green
-  and then lose every booking on the first cold start. It exists
-because the raw failures were unreadable — a missing `DATABASE_URL` used to
-surface as a Prisma wasm dump forty lines into the log.
+Required: `DATABASE_URL`, `DIRECT_URL`, `SESSION_SECRET`. Recommended:
+`CRON_SECRET`, `NEXT_PUBLIC_APP_URL`, plus whichever supplier and Stripe keys
+you are using.
 
 ---
 
@@ -256,7 +228,7 @@ src/app/               Next.js App Router pages and API routes
 tests/                 money, matching, scraping and aggregation invariants
 scripts/settle.ts      settlement sweep (run on a schedule)
 scripts/e2e-split.ts   end-to-end walk of the whole money path
-netlify/functions/     hourly settlement trigger
+vercel.json            settlement cron schedule
 ```
 
 ## Commands

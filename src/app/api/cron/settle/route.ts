@@ -6,7 +6,11 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 /**
- * Settlement endpoint, driven by the Netlify scheduled function (or any cron).
+ * Settlement endpoint, driven by the schedule in vercel.json (or any cron).
+ *
+ * Vercel sends `Authorization: Bearer $CRON_SECRET` on every cron invocation
+ * when that variable is set, which is exactly what this checks — so the schedule
+ * needs no wiring beyond the env var.
  *
  * Guarded by a shared secret rather than a session: there is no user here, and
  * this route moves money. Compared in constant time so the check cannot be
