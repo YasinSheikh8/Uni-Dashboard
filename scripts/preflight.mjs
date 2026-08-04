@@ -47,7 +47,7 @@ const RECOMMENDED = [
   {
     name: "NEXT_PUBLIC_APP_URL",
     why: "Used for absolute links and as the settlement function's fallback origin.",
-    fix: "Set it to the deployed origin, e.g. https://your-site.netlify.app",
+    fix: "Set it to the deployed origin, e.g. https://your-project.vercel.app",
   },
   {
     name: "STRIPE_SECRET_KEY",
