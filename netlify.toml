@@ -6,9 +6,10 @@
 
 [build.environment]
   NODE_VERSION = "22"
-  # Prisma's query engine has to be built for the Lambda runtime as well as the
-  # build machine, or the deployed functions cannot open a connection.
-  PRISMA_CLI_BINARY_TARGETS = "native,rhel-openssl-3.0.x"
+  # The CLI downloader accepts concrete platforms, not the schema-only
+  # "native" alias. Download engines for both the build image and Node 22
+  # Functions runtime.
+  PRISMA_CLI_BINARY_TARGETS = "debian-openssl-3.0.x,rhel-openssl-3.0.x"
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"

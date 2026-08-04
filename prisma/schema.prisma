@@ -9,7 +9,7 @@
 generator client {
   provider = "prisma-client-js"
   // "native" builds for the machine running `prisma generate`;
-  // rhel-openssl-3.0.x is what Netlify/Vercel lambdas actually run on.
+  // rhel-openssl-3.0.x provides the engine used by Node 22 on Netlify.
   binaryTargets = ["native", "rhel-openssl-3.0.x"]
 }
 
