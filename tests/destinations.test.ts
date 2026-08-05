@@ -104,3 +104,37 @@ describe("suggestDestinations", () => {
     assert.deepEqual(suggestDestinations("zzzzz"), []);
   });
 });
+
+describe("regressions", () => {
+  it("knows Bodrum", () => {
+    // Reported missing: the table had no Turkish resort towns at all.
+    assert.equal(resolveDestination("bodrum").countryCode, "TR");
+    assert.equal(suggestDestinations("bodrum")[0]?.value, "Bodrum, TR");
+  });
+
+  it("returns canonical casing, not whatever was typed", () => {
+    // Otherwise the results heading reads "8 stays in lisbon".
+    assert.equal(resolveDestination("LISBON").city, "Lisbon");
+    assert.equal(resolveDestination("lisbon").city, "Lisbon");
+  });
+
+  it("normalises an alias to the canonical city on resolve", () => {
+    assert.equal(resolveDestination("lisboa").city, "Lisbon");
+    assert.equal(resolveDestination("münchen").city, "Munich");
+  });
+
+  it("leaves an unknown place untouched rather than mangling it", () => {
+    const r = resolveDestination("zzzville");
+    assert.equal(r.city, "zzzville");
+    assert.equal(r.countryCode, undefined);
+  });
+
+  it("has no duplicate city keys", () => {
+    // Two entries for one city silently shadowed each other.
+    const seen = new Set<string>();
+    for (const suggestion of suggestDestinations("a", 500)) {
+      assert.ok(!seen.has(suggestion.value), `duplicate: ${suggestion.value}`);
+      seen.add(suggestion.value);
+    }
+  });
+});

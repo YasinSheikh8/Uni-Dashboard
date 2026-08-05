@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { DestinationInput } from "./DestinationInput";
 
 function isoDate(daysFromNow: number): string {
@@ -27,7 +27,15 @@ export function SearchForm({
   };
 }) {
   const router = useRouter();
-  const [pending, setPending] = useState(false);
+  /**
+   * A transition rather than a boolean.
+   *
+   * The previous version set `pending` on submit and never cleared it. On the
+   * results page a new search navigates to another /search URL, which does NOT
+   * remount this component — so the flag stayed true, the button stayed
+   * disabled, and you could search exactly once per page load.
+   */
+  const [pending, startTransition] = useTransition();
 
   const [destination, setDestination] = useState(defaults?.destination ?? "");
   const [checkIn, setCheckIn] = useState(defaults?.checkIn ?? isoDate(30));
@@ -39,16 +47,20 @@ export function SearchForm({
   function submit(event: React.FormEvent) {
     event.preventDefault();
     if (invalidDates) return;
-    setPending(true);
-    router.push(
-      `/search?${new URLSearchParams({ destination, checkIn, checkOut, guests }).toString()}`,
-    );
+    startTransition(() => {
+      router.push(
+        `/search?${new URLSearchParams({ destination, checkIn, checkOut, guests }).toString()}`,
+      );
+    });
   }
 
   return (
     <form onSubmit={submit}>
       <div
-        className="grid gap-px overflow-hidden rounded-[var(--radius-card)] bg-[var(--color-border)] sm:grid-cols-[1.7fr_1fr_1fr_0.62fr_auto]"
+        // No overflow-hidden here: it clipped the suggestions dropdown, which
+        // is absolutely positioned inside this grid. Corner rounding is done on
+        // the first and last cells instead — see .search-bar in globals.css.
+        className="search-bar grid gap-px rounded-[var(--radius-card)] bg-[var(--color-border)] sm:grid-cols-[1.7fr_1fr_1fr_0.62fr_auto]"
         style={{ boxShadow: "var(--elev-3)" }}
       >
         {/* A combobox rather than a plain field: picking a suggestion writes

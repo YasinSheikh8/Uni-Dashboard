@@ -165,6 +165,29 @@ body {
     perspective: 1200px;
   }
 
+  /*
+   * Rounds the search bar's outer corners without an overflow-hidden wrapper.
+   * The wrapper used to clip, which hid the destination suggestions entirely —
+   * the dropdown rendered, it just could not be seen.
+   */
+  .search-bar > :first-child {
+    border-radius: var(--radius-card) var(--radius-card) 0 0;
+  }
+
+  .search-bar > :last-child {
+    border-radius: 0 0 var(--radius-card) var(--radius-card);
+  }
+
+  @media (min-width: 640px) {
+    .search-bar > :first-child {
+      border-radius: var(--radius-card) 0 0 var(--radius-card);
+    }
+
+    .search-bar > :last-child {
+      border-radius: 0 var(--radius-card) var(--radius-card) 0;
+    }
+  }
+
   .input {
     width: 100%;
     background: transparent;
