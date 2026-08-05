@@ -104,7 +104,18 @@ export function DestinationInput({
     }
   }
 
+  /**
+   * Show the panel even with no matches, carrying a hint.
+   *
+   * ~490 cities is a lot and still not everywhere. Silence when someone types a
+   * real place we happen not to know reads as "this is broken" — and the search
+   * would then go out without a country and be rejected. Telling them the format
+   * that works turns a dead end into a one-word fix.
+   */
+  const hasQuery = value.trim().length >= 2;
+  const showHint = open && hasQuery && suggestions.length === 0;
   const showList = open && suggestions.length > 0;
+  const showPanel = showList || showHint;
 
   return (
     <div ref={wrapperRef} className="relative">
@@ -120,20 +131,31 @@ export function DestinationInput({
             setOpen(true);
           }
         }}
-        onFocus={() => {
-          if (suggestions.length > 0) setOpen(true);
-        }}
+        onFocus={() => setOpen(true)}
         onKeyDown={onKeyDown}
         className={className}
         placeholder={placeholder}
         required={required}
         autoComplete="off"
         role="combobox"
-        aria-expanded={showList}
+        aria-expanded={showPanel}
         aria-controls={listId}
         aria-autocomplete="list"
         aria-activedescendant={showList ? `${listId}-${active}` : undefined}
       />
+
+      {showHint && (
+        <div
+          className="absolute left-0 right-0 top-[calc(100%+10px)] z-50 rounded-[var(--radius-card)] bg-[var(--color-surface)] px-4 py-3 text-xs leading-relaxed text-[var(--color-ink-soft)]"
+          style={{ boxShadow: "var(--elev-3)", border: "1px solid var(--color-border)" }}
+        >
+          Not one we know. Add the country and it will still work — like{" "}
+          <span className="font-medium text-[var(--color-ink)]">
+            {value.trim()}, Turkey
+          </span>
+          .
+        </div>
+      )}
 
       {showList && (
         <ul

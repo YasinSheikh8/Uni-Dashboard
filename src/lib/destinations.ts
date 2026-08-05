@@ -44,7 +44,22 @@ const COUNTRY_NAMES: Record<string, string> = {
   malaysia: "MY", philippines: "PH", "south korea": "KR", korea: "KR",
   india: "IN", australia: "AU", "new zealand": "NZ", "south africa": "ZA",
   egypt: "EG", morocco: "MA", "united arab emirates": "AE", uae: "AE",
-  "saudi arabia": "SA", qatar: "QA", israel: "IL",
+  "saudi arabia": "SA", qatar: "QA", israel: "IL", cyprus: "CY", malta: "MT",
+  romania: "RO", bulgaria: "BG", serbia: "RS", slovenia: "SI",
+  slovakia: "SK", estonia: "EE", latvia: "LV", lithuania: "LT",
+  albania: "AL", "bosnia and herzegovina": "BA", "north macedonia": "MK",
+  russia: "RU", oman: "OM", kuwait: "KW", bahrain: "BH", jordan: "JO",
+  lebanon: "LB", tunisia: "TN", kenya: "KE", tanzania: "TZ",
+  zimbabwe: "ZW", namibia: "NA", ghana: "GH", nigeria: "NG",
+  ethiopia: "ET", rwanda: "RW", mauritius: "MU", seychelles: "SC",
+  maldives: "MV", "sri lanka": "LK", nepal: "NP", bhutan: "BT",
+  cambodia: "KH", laos: "LA", myanmar: "MM", taiwan: "TW", macau: "MO",
+  mongolia: "MN", georgia: "GE", azerbaijan: "AZ", armenia: "AM",
+  uzbekistan: "UZ", kazakhstan: "KZ", pakistan: "PK", bangladesh: "BD",
+  "dominican republic": "DO", bahamas: "BS", jamaica: "JM",
+  barbados: "BB", "puerto rico": "PR", cuba: "CU", "costa rica": "CR",
+  panama: "PA", guatemala: "GT", "el salvador": "SV", ecuador: "EC",
+  bolivia: "BO", paraguay: "PY", uruguay: "UY",
 };
 
 /**
@@ -57,11 +72,27 @@ const CITY_COUNTRIES: Record<string, string> = {
   lisbon: "PT", lisboa: "PT", porto: "PT", faro: "PT", madeira: "PT",
   madrid: "ES", barcelona: "ES", seville: "ES", sevilla: "ES", valencia: "ES",
   malaga: "ES", ibiza: "ES", palma: "ES", bilbao: "ES", granada: "ES",
+  alicante: "ES", marbella: "ES", benidorm: "ES", tenerife: "ES",
+  "gran canaria": "ES", lanzarote: "ES", fuerteventura: "ES", mallorca: "ES",
+  menorca: "ES", "san sebastian": "ES", cordoba: "ES", "córdoba": "ES",
+  salamanca: "ES", santander: "ES", cadiz: "ES", "cádiz": "ES",
   paris: "FR", nice: "FR", lyon: "FR", marseille: "FR", bordeaux: "FR",
   cannes: "FR", toulouse: "FR", strasbourg: "FR",
   rome: "IT", roma: "IT", milan: "IT", milano: "IT", venice: "IT",
   venezia: "IT", florence: "IT", firenze: "IT", naples: "IT", napoli: "IT",
-  turin: "IT", bologna: "IT", verona: "IT", palermo: "IT",
+  turin: "IT", bologna: "IT", verona: "IT", palermo: "IT", "amalfi": "IT",
+  positano: "IT", sorrento: "IT", capri: "IT", "lake como": "IT", siena: "IT",
+  pisa: "IT", genoa: "IT", bari: "IT", catania: "IT", sardinia: "IT",
+  "cinque terre": "IT", rimini: "IT", taormina: "IT",
+  albufeira: "PT", lagos: "PT", cascais: "PT", sintra: "PT",
+  coimbra: "PT", braga: "PT", azores: "PT",
+  nicosia: "CY", paphos: "CY", limassol: "CY", "ayia napa": "CY", larnaca: "CY",
+  valletta: "MT", sliema: "MT",
+  "st petersburg": "RU", moscow: "RU",
+  bucharest: "RO", sofia: "BG", "sunny beach": "BG", varna: "BG",
+  belgrade: "RS", ljubljana: "SI", bratislava: "SK", tallinn: "EE",
+  riga: "LV", vilnius: "LT", tirana: "AL", sarajevo: "BA", skopje: "MK",
+  hvar: "HR", zadar: "HR", pula: "HR", rovinj: "HR",
   berlin: "DE", munich: "DE", münchen: "DE", hamburg: "DE", frankfurt: "DE",
   cologne: "DE", köln: "DE", düsseldorf: "DE", dusseldorf: "DE",
   stuttgart: "DE", dresden: "DE",
@@ -71,12 +102,19 @@ const CITY_COUNTRIES: Record<string, string> = {
   zurich: "CH", geneva: "CH", basel: "CH", lucerne: "CH", interlaken: "CH",
   prague: "CZ", praha: "CZ", warsaw: "PL", krakow: "PL", kraków: "PL",
   budapest: "HU", athens: "GR", santorini: "GR", mykonos: "GR",
-  thessaloniki: "GR", crete: "GR", rhodes: "GR",
+  thessaloniki: "GR", crete: "GR", rhodes: "GR", corfu: "GR", kos: "GR",
+  zakynthos: "GR", zante: "GR", naxos: "GR", paros: "GR", chania: "GR",
+  heraklion: "GR", "kefalonia": "GR", lefkada: "GR", skiathos: "GR",
+  halkidiki: "GR", "milos": "GR", ios: "GR",
   dubrovnik: "HR", split: "HR", zagreb: "HR",
   dublin: "IE", cork: "IE", galway: "IE",
   copenhagen: "DK", stockholm: "SE", gothenburg: "SE", oslo: "NO",
   bergen: "NO", helsinki: "FI", reykjavik: "IS", reykjavík: "IS",
   istanbul: "TR", antalya: "TR", cappadocia: "TR", izmir: "TR",
+  bodrum: "TR", marmaris: "TR", fethiye: "TR", kusadasi: "TR", "kuşadası": "TR",
+  alanya: "TR", side: "TR", belek: "TR", ankara: "TR", bursa: "TR",
+  dalaman: "TR", "oludeniz": "TR", "ölüdeniz": "TR", cesme: "TR", "çeşme": "TR",
+  trabzon: "TR", pamukkale: "TR", goreme: "TR", "göreme": "TR",
   london: "GB", manchester: "GB", edinburgh: "GB", glasgow: "GB",
   liverpool: "GB", birmingham: "GB", bristol: "GB", bath: "GB",
   oxford: "GB", cambridge: "GB", brighton: "GB", belfast: "GB",
@@ -116,7 +154,47 @@ const CITY_COUNTRIES: Record<string, string> = {
   cairo: "EG", "sharm el sheikh": "EG", hurghada: "EG", luxor: "EG",
   marrakech: "MA", marrakesh: "MA", casablanca: "MA", fes: "MA",
   dubai: "AE", "abu dhabi": "AE", riyadh: "SA", jeddah: "SA", doha: "QA",
-  "tel aviv": "IL", jerusalem: "IL",
+  "tel aviv": "IL", jerusalem: "IL", "ras al khaimah": "AE", fujairah: "AE",
+  sharjah: "AE", muscat: "OM", salalah: "OM", "kuwait city": "KW",
+  manama: "BH", amman: "JO", petra: "JO", "dead sea": "JO", beirut: "LB",
+  agadir: "MA", tangier: "MA", essaouira: "MA", rabat: "MA", chefchaouen: "MA",
+  tunis: "TN", hammamet: "TN", sousse: "TN", djerba: "TN",
+  nairobi: "KE", mombasa: "KE", zanzibar: "TZ", "dar es salaam": "TZ",
+  "victoria falls": "ZW", windhoek: "NA", accra: "GH",
+  "addis ababa": "ET", kigali: "RW", "port louis": "MU", mahe: "SC",
+  male: "MV", maldives: "MV", colombo: "LK", galle: "LK", kandy: "LK",
+  kathmandu: "NP", "pokhara": "NP", thimphu: "BT", "phnom penh": "KH",
+  "siem reap": "KH", vientiane: "LA", "luang prabang": "LA", yangon: "MM",
+  taipei: "TW", "kaohsiung": "TW", macau: "MO", "ulaanbaatar": "MN",
+  tbilisi: "GE", baku: "AZ", yerevan: "AM", tashkent: "UZ", samarkand: "UZ",
+  almaty: "KZ", "nur-sultan": "KZ", islamabad: "PK", lahore: "PK",
+  karachi: "PK", dhaka: "BD", "kota kinabalu": "MY", langkawi: "MY",
+  "boracay": "PH", palawan: "PH", "el nido": "PH", lombok: "ID",
+  yogyakarta: "ID", surabaya: "ID", bandung: "ID", "nusa dua": "ID",
+  "koh samui": "TH", "koh phangan": "TH", "hua hin": "TH", "koh tao": "TH",
+  "nha trang": "VN", "phu quoc": "VN", hue: "VN", sapa: "VN",
+  jeju: "KR", incheon: "KR", nara: "JP", okinawa: "JP", nikko: "JP",
+  hakone: "JP", "kanazawa": "JP", chengdu: "CN", "xi'an": "CN", xian: "CN",
+  hangzhou: "CN", sanya: "CN", agra: "IN", udaipur: "IN", varanasi: "IN",
+  kerala: "IN", kochi: "IN", rishikesh: "IN", hyderabad: "IN", pune: "IN",
+  hobart: "AU", darwin: "AU", canberra: "AU",
+  rotorua: "NZ", "bay of islands": "NZ",
+  "punta cana": "DO", "santo domingo": "DO", nassau: "BS", "montego bay": "JM",
+  kingston: "JM", bridgetown: "BB", "san juan": "PR", havana: "CU",
+  varadero: "CU", "san jose": "CR", tamarindo: "CR", panama: "PA",
+  "guatemala city": "GT", antigua: "GT", "san salvador": "SV",
+  quito: "EC", guayaquil: "EC", "la paz": "BO", asuncion: "PY",
+  montevideo: "UY", "punta del este": "UY", salvador: "BR", recife: "BR",
+  "florianopolis": "BR", brasilia: "BR", manaus: "BR", mendoza: "AR",
+  bariloche: "AR", ushuaia: "AR", "valparaiso": "CL", "san pedro de atacama": "CL",
+  "puerto vallarta": "MX", oaxaca: "MX", merida: "MX", monterrey: "MX",
+  "san miguel de allende": "MX", cozumel: "MX",
+  ottawa: "CA", edmonton: "CA", halifax: "CA", victoria: "CA", banff: "CA",
+  "salt lake city": "US", "san antonio": "US", charleston: "US",
+  savannah: "US", "key west": "US", aspen: "US", "palm springs": "US",
+  minneapolis: "US", detroit: "US", "st louis": "US", "kansas city": "US",
+  pittsburgh: "US", baltimore: "US", "virginia beach": "US", tampa: "US",
+  "fort lauderdale": "US", sedona: "US", anchorage: "US", maui: "US",
 };
 
 /**
@@ -138,6 +216,20 @@ const CODE_NAMES: Record<string, string> = {
   KR: "South Korea", IN: "India", AU: "Australia", NZ: "New Zealand",
   ZA: "South Africa", EG: "Egypt", MA: "Morocco",
   AE: "United Arab Emirates", SA: "Saudi Arabia", QA: "Qatar", IL: "Israel",
+  CY: "Cyprus", MT: "Malta", RO: "Romania", BG: "Bulgaria", RS: "Serbia",
+  SI: "Slovenia", SK: "Slovakia", EE: "Estonia", LV: "Latvia", LT: "Lithuania",
+  AL: "Albania", BA: "Bosnia and Herzegovina", MK: "North Macedonia",
+  RU: "Russia", OM: "Oman", KW: "Kuwait", BH: "Bahrain", JO: "Jordan",
+  LB: "Lebanon", TN: "Tunisia", KE: "Kenya", TZ: "Tanzania", ZW: "Zimbabwe",
+  NA: "Namibia", GH: "Ghana", NG: "Nigeria", ET: "Ethiopia", RW: "Rwanda",
+  MU: "Mauritius", SC: "Seychelles", MV: "Maldives", LK: "Sri Lanka",
+  NP: "Nepal", BT: "Bhutan", KH: "Cambodia", LA: "Laos", MM: "Myanmar",
+  TW: "Taiwan", MO: "Macau", MN: "Mongolia", GE: "Georgia", AZ: "Azerbaijan",
+  AM: "Armenia", UZ: "Uzbekistan", KZ: "Kazakhstan", PK: "Pakistan",
+  BD: "Bangladesh", DO: "Dominican Republic", BS: "Bahamas", JM: "Jamaica",
+  BB: "Barbados", PR: "Puerto Rico", CU: "Cuba", CR: "Costa Rica",
+  PA: "Panama", GT: "Guatemala", SV: "El Salvador", EC: "Ecuador",
+  BO: "Bolivia", PY: "Paraguay", UY: "Uruguay",
 };
 
 export function countryName(code: string): string {
@@ -156,39 +248,6 @@ function fold(value: string): string {
 /** Title-cases a lookup key back into something presentable. */
 function titleCase(value: string): string {
   return value.replace(/(^|[\s-])\w/g, (char) => char.toUpperCase());
-}
-
-/** Uppercase ISO alpha-2 codes, so "PT" in the input is recognised as a country. */
-const ISO_CODES = new Set(Object.values(COUNTRY_NAMES));
-
-export function resolveDestination(input: string): ResolvedDestination {
-  const trimmed = input.trim();
-  if (!trimmed) return { city: "", source: "unresolved" };
-
-  // 1. Explicit country after a comma: "Lisbon, PT" / "Lisbon, Portugal".
-  const parts = trimmed.split(",").map((part) => part.trim()).filter(Boolean);
-  if (parts.length >= 2) {
-    const tail = parts[parts.length - 1];
-    const city = parts.slice(0, -1).join(", ");
-
-    if (tail.length === 2 && ISO_CODES.has(tail.toUpperCase())) {
-      return { city, countryCode: tail.toUpperCase(), source: "explicit" };
-    }
-
-    const named = COUNTRY_NAMES[tail.toLowerCase()];
-    if (named) return { city, countryCode: named, source: "explicit" };
-
-    // A trailing segment we do not recognise is probably a region
-    // ("Brooklyn, New York"), so fall through and try the leading city.
-  }
-
-  // 2. Known city.
-  const cityOnly = parts[0] ?? trimmed;
-  const known = CITY_COUNTRIES[cityOnly.toLowerCase()];
-  if (known) return { city: cityOnly, countryCode: known, source: "known-city" };
-
-  // 3. Unresolved — the caller decides, rather than us guessing a country.
-  return { city: cityOnly, source: "unresolved" };
 }
 
 /**
@@ -221,6 +280,48 @@ const ALIASES: Record<string, string> = {
   "medellín": "medellin",
   marrakesh: "marrakech",
 };
+
+/** Uppercase ISO alpha-2 codes, so "PT" in the input is recognised as a country. */
+const ISO_CODES = new Set(Object.values(COUNTRY_NAMES));
+
+export function resolveDestination(input: string): ResolvedDestination {
+  const trimmed = input.trim();
+  if (!trimmed) return { city: "", source: "unresolved" };
+
+  // 1. Explicit country after a comma: "Lisbon, PT" / "Lisbon, Portugal".
+  const parts = trimmed.split(",").map((part) => part.trim()).filter(Boolean);
+  if (parts.length >= 2) {
+    const tail = parts[parts.length - 1];
+    const city = parts.slice(0, -1).join(", ");
+
+    if (tail.length === 2 && ISO_CODES.has(tail.toUpperCase())) {
+      return { city, countryCode: tail.toUpperCase(), source: "explicit" };
+    }
+
+    const named = COUNTRY_NAMES[tail.toLowerCase()];
+    if (named) return { city, countryCode: named, source: "explicit" };
+
+    // A trailing segment we do not recognise is probably a region
+    // ("Brooklyn, New York"), so fall through and try the leading city.
+  }
+
+  // 2. Known city. Returned in its canonical casing rather than however it was
+  // typed, so headings read "stays in Lisbon" and not "stays in lisbon".
+  const cityOnly = parts[0] ?? trimmed;
+  const key = cityOnly.toLowerCase();
+  const known = CITY_COUNTRIES[key];
+  if (known) {
+    const canonicalKey = ALIASES[key] ?? key;
+    return {
+      city: titleCase(canonicalKey),
+      countryCode: CITY_COUNTRIES[canonicalKey] ?? known,
+      source: "known-city",
+    };
+  }
+
+  // 3. Unresolved — the caller decides, rather than us guessing a country.
+  return { city: cityOnly, source: "unresolved" };
+}
 
 export interface DestinationSuggestion {
   /** What to show, e.g. "Lisbon, Portugal". */
