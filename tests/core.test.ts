@@ -134,3 +134,16 @@ test("finds a redis:// connection string", () => {
   assert.equal(findRedisUrl({ STORAGE_REDIS_URL: "rediss://u:p@h:1" }), "rediss://u:p@h:1");
   assert.equal(findRedisUrl({ REDIS_URL: "https://not-tcp" }), null);
 });
+
+import { readLimitError } from "../src/lib/ai/generate";
+test("tells 'request too big' apart from 'wait a moment'", () => {
+  const big = readLimitError(413, "Request too large for model `openai/gpt-oss-120b` on tokens per minute (TPM): Limit 8000, Requested 9512, please reduce your message size and try again.");
+  assert.equal(big.tooLarge, true);
+  const big429 = readLimitError(429, "Rate limit reached on tokens per minute (TPM): Limit 8000, Used 0, Requested 9100.");
+  assert.equal(big429.tooLarge, true);
+  const wait = readLimitError(429, "Rate limit reached on tokens per minute (TPM): Limit 8000, Used 6000, Requested 3000. Please try again in 7.5s.");
+  assert.deepEqual(wait, { tooLarge: false, waitMs: 7500 });
+  const daily = readLimitError(429, "Rate limit reached on tokens per day (TPD): Limit 200000, Used 199000, Requested 3000. Please try again in 7m12.5s.");
+  assert.deepEqual(daily, { tooLarge: false, waitMs: 432500 });
+  assert.equal(readLimitError(429, "", "12").waitMs, 12000);
+});

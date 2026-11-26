@@ -46,11 +46,11 @@ const MAX_PDFS = 4;
 export function aiLimits() {
   const groq = new URL(aiBaseUrl()).hostname.endsWith("groq.com");
   const num = (v: string | undefined, d: number) => (v && Number.isFinite(Number(v)) ? Number(v) : d);
-  const maxInputChars = num(process.env.AI_MAX_INPUT_CHARS, groq ? 15_000 : 110_000);
+  const maxInputChars = num(process.env.AI_MAX_INPUT_CHARS, groq ? 10_000 : 110_000);
   return {
     maxInputChars,
     maxSourceChars: Math.min(30_000, maxInputChars),
-    maxOutputTokens: num(process.env.AI_MAX_OUTPUT_TOKENS, groq ? 3_000 : 12_000),
+    maxOutputTokens: num(process.env.AI_MAX_OUTPUT_TOKENS, groq ? 2_500 : 12_000),
     concurrency: num(process.env.AI_CONCURRENCY, groq ? 1 : 3),
     minIntervalMs: num(process.env.AI_MIN_INTERVAL_MS, groq ? 62_000 : 0),
   };
@@ -91,12 +91,12 @@ Hard rules:
 - British English. Plain, direct study language.
 - Reply with a single JSON object only, matching the given JSON Schema exactly. No prose, no code fences.`;
 
-function sourceText(materials: Material[]) {
-  const { maxInputChars, maxSourceChars } = aiLimits();
-  let budget = maxInputChars;
+function sourceText(materials: Material[], maxChars: number) {
+  const maxSource = Math.min(aiLimits().maxSourceChars, maxChars);
+  let budget = maxChars;
   return materials
     .map((m) => {
-      const body = m.text.slice(0, Math.min(maxSourceChars, Math.max(0, budget)));
+      const body = m.text.slice(0, Math.min(maxSource, Math.max(0, budget)));
       budget -= body.length;
       const cut = body.length < m.text.length ? "\n[…source shortened to fit]" : "";
       return `<source id="${m.id}" title="${m.title.replace(/"/g, "'")}">\n${body}${cut}\n</source>`;
@@ -117,7 +117,7 @@ async function chat(body: Record<string, unknown>) {
     headers: {
       Authorization: `Bearer ${aiKey()}`,
       "Content-Type": "application/json",
-      // OpenRouter attribution headers (ignored by other providers).
+      // OpenRouter attribution header (ignored by other providers).
       "X-Title": "Study dashboard",
     },
     body: JSON.stringify(body),
@@ -127,27 +127,64 @@ async function chat(body: Record<string, unknown>) {
     choices?: { message?: { content?: string | null }; finish_reason?: string }[];
     error?: { message?: string };
   };
-  return { ok: res.ok, status: res.status, data };
+  return { ok: res.ok, status: res.status, data, message: data.error?.message ?? "", retryAfter: res.headers.get("retry-after") };
+}
+
+/**
+ * Read a provider's limit error. Groq, for example, says:
+ * "Limit 8000, Used 0, Requested 9512" (this one request is bigger than the
+ * per-minute allowance — it must shrink) or "Please try again in 7.5s"
+ * (a short wait is enough).
+ */
+export function readLimitError(status: number, message: string, retryAfter?: string | null) {
+  const limit = Number(/Limit\s+(\d+)/i.exec(message)?.[1]);
+  const requested = Number(/Requested\s+(\d+)/i.exec(message)?.[1]);
+  const tooLarge =
+    status === 413 ||
+    (limit > 0 && requested > limit) ||
+    /request too large|too many tokens|reduce the length|maximum context length|context_length/i.test(message);
+  const m = /try again in\s+(?:(\d+)m)?\s*([\d.]+)s/i.exec(message);
+  let waitMs = m ? (Number(m[1] ?? 0) * 60 + Number(m[2])) * 1000 : NaN;
+  if (Number.isNaN(waitMs) && retryAfter && /^\d+(\.\d+)?$/.test(retryAfter)) waitMs = Number(retryAfter) * 1000;
+  return { tooLarge, waitMs: Number.isNaN(waitMs) ? null : Math.ceil(waitMs) };
 }
 
 async function call<T>(schema: z.ZodType<T>, materials: Material[], task: string): Promise<T> {
-  if (!aiConfigured()) throw new AiUnavailable("AI generation is not configured (set AI_API_KEY).");
+  if (!aiConfigured()) throw new AiUnavailable("AI generation is not configured (set GROQ_API_KEY or AI_API_KEY).");
   const jsonSchema = z.toJSONSchema(schema);
-  const messages = [
-    { role: "system", content: RULES },
-    { role: "user", content: `${sourceText(materials)}\n\nTask: ${task}\n\nJSON Schema for your reply:\n${JSON.stringify(jsonSchema)}` },
-  ];
-  const base = { model: aiModel(), messages, temperature: 0.2, max_tokens: aiLimits().maxOutputTokens };
+  const limits = aiLimits();
+  let scale = 1;
   let lastError = "The AI response couldn't be read.";
-  for (let attempt = 0; attempt < 2; attempt++) {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const inputChars = Math.max(2_000, Math.floor(limits.maxInputChars * scale));
+    const maxTokens = Math.max(1_200, Math.floor(limits.maxOutputTokens * Math.max(scale, 0.5)));
+    const messages = [
+      { role: "system", content: RULES },
+      { role: "user", content: `${sourceText(materials, inputChars)}\n\nTask: ${task}\n\nJSON Schema for your reply:\n${JSON.stringify(jsonSchema)}` },
+    ];
+    const base = { model: aiModel(), messages, temperature: 0.2, max_tokens: maxTokens };
     // Prefer strict schema output; fall back to plain JSON mode for providers that don't support it.
     let r = await chat({ ...base, response_format: { type: "json_schema", json_schema: { name: "study_output", strict: true, schema: jsonSchema } } });
-    if (!r.ok && r.status === 400) r = await chat({ ...base, response_format: { type: "json_object" } });
+    if (!r.ok && r.status === 400 && !readLimitError(400, r.message).tooLarge) r = await chat({ ...base, response_format: { type: "json_object" } });
     if (!r.ok) {
-      if (r.status === 401 || r.status === 403) throw new AiUnavailable("The AI provider rejected the API key.");
-      lastError = `The AI provider returned an error (${r.status}).`;
-      if (r.status === 429) throw new AiRateLimited("The free AI plan's rate limit was reached — the rest will be written in a later run.");
-      if (r.status === 413) throw new Error("This session's materials are too long for the AI plan's request limit.");
+      const detail = r.message ? `: ${r.message.slice(0, 300)}` : "";
+      if (r.status === 401 || r.status === 403) throw new AiUnavailable(`The AI provider rejected the API key (${r.status})${detail}`);
+      if (r.status === 404) throw new AiUnavailable(`The AI provider doesn't offer the model "${aiModel()}"${detail}`);
+      const lim = readLimitError(r.status, r.message, r.retryAfter);
+      if (lim.tooLarge) {
+        // This single request is over the plan's allowance: send less and try again.
+        scale *= 0.55;
+        lastError = `The materials were too long for the AI plan even after shortening${detail}`;
+        continue;
+      }
+      if (r.status === 429) {
+        if (lim.waitMs !== null && lim.waitMs <= 65_000) {
+          await new Promise((res) => setTimeout(res, lim.waitMs! + 500));
+          continue;
+        }
+        throw new AiRateLimited(`AI provider limit reached${detail}`);
+      }
+      lastError = `The AI provider returned an error (${r.status})${detail}`;
       if (r.status >= 500) continue;
       throw new Error(lastError);
     }
