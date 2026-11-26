@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import type { StudySource } from "@/lib/data/source";
 import { unitsFor, type Session } from "@/lib/sessions";
 import { getAutoNotesState, listNotes, saveAutoNotesState, upsertSessionNote, type AutoNotesState, type Note } from "@/lib/store/user-data";
-import { AiRateLimited, aiConfigured, aiLimits, generateSessionNotes } from "./generate";
+import { AiRateLimited, AiUnavailable, aiConfigured, aiLimits, generateSessionNotes } from "./generate";
 
 /**
  * Keeps concise revision notes up to date for every lecture, seminar and
@@ -96,6 +96,9 @@ export async function runAutoNotes(source: StudySource, opts: { budgetMs?: numbe
   let unreadable = 0;
   let failed = 0;
   let rateLimited = false;
+  let rateLimitDetail = "";
+  let stoppedForSetup = false;
+  let firstFailure = "";
   const limits = aiLimits();
   let nextSlot = 0;
 
@@ -131,16 +134,27 @@ export async function runAutoNotes(source: StudySource, opts: { budgetMs?: numbe
         state.sessions[item.session.key] = { fp: item.fp, status: "done", at: Date.now() };
         generated++;
       } catch (e) {
+        if (e instanceof AiUnavailable) {
+          // Key or model problem: every other note would fail the same way, so stop.
+          rateLimited = true;
+          rateLimitDetail = e.message;
+          stoppedForSetup = true;
+          break;
+        }
         if (e instanceof AiRateLimited) {
           // Not this session's fault: leave it queued for the next run.
           rateLimited = true;
+          rateLimitDetail = e.message;
           break;
         }
         const msg = e instanceof Error ? e.message : String(e);
         const isUnreadable = /nothing readable/i.test(msg);
         state.sessions[item.session.key] = { fp: item.fp, status: isUnreadable ? "unreadable" : "error", at: Date.now(), error: isUnreadable ? undefined : msg.slice(0, 200) };
         if (isUnreadable) unreadable++;
-        else failed++;
+        else {
+          failed++;
+          firstFailure ||= msg.slice(0, 200);
+        }
       }
       // Save progress as we go so a timeout never loses finished work.
       await saveAutoNotesState(user, state);
@@ -150,7 +164,9 @@ export async function runAutoNotes(source: StudySource, opts: { budgetMs?: numbe
 
   const remaining = items.filter((i) => i.decision === "generate").length - generated - unreadable - failed;
   const withNotes = items.filter((i) => i.decision === "up-to-date" || i.decision === "kept-yours").length + generated;
-  const message = `${generated} written, ${unreadable} unreadable, ${failed} failed, ${Math.max(0, remaining)} still to do${rateLimited ? " (paused: free AI plan limit reached — continues automatically later)" : ""}`;
+  const message = `${generated} written, ${unreadable} unreadable, ${failed} failed, ${Math.max(0, remaining)} still to do${failed && firstFailure ? ` (first failure: ${firstFailure})` : ""}${
+    stoppedForSetup ? ` (stopped — ${rateLimitDetail}. Check the AI key and model in Vercel's environment variables.)` : rateLimited ? ` (paused — ${rateLimitDetail || "AI plan limit reached"}; continues automatically later)` : ""
+  }`;
   state.lastRunAt = Date.now();
   state.lastRunSummary = message;
   await saveAutoNotesState(user, state);
