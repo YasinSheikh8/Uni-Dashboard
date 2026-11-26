@@ -38,7 +38,7 @@ export function AutoNotesPanel() {
       }
       setLog(`So far: ${data.message}`);
       await load();
-      if (!data.remaining || (data.generated === 0 && data.unreadable === 0)) break;
+      if (data.rateLimited || !data.remaining || (data.generated === 0 && data.unreadable === 0)) break;
     }
     setRunning(false);
     await load();

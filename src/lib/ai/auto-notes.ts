@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import type { StudySource } from "@/lib/data/source";
 import { unitsFor, type Session } from "@/lib/sessions";
 import { getAutoNotesState, listNotes, saveAutoNotesState, upsertSessionNote, type AutoNotesState, type Note } from "@/lib/store/user-data";
-import { aiConfigured, generateSessionNotes } from "./generate";
+import { AiRateLimited, aiConfigured, aiLimits, generateSessionNotes } from "./generate";
 
 /**
  * Keeps concise revision notes up to date for every lecture, seminar and
@@ -81,6 +81,7 @@ export interface RunResult {
   total: number;
   withNotes: number;
   message: string;
+  rateLimited?: boolean;
 }
 
 /** Generate notes for sessions that need them, within a time budget. */
@@ -94,9 +95,19 @@ export async function runAutoNotes(source: StudySource, opts: { budgetMs?: numbe
   let generated = 0;
   let unreadable = 0;
   let failed = 0;
+  let rateLimited = false;
+  const limits = aiLimits();
+  let nextSlot = 0;
 
   const worker = async () => {
-    while (queue.length && Date.now() - started < budget) {
+    while (queue.length && !rateLimited && Date.now() - started < budget) {
+      // Pace requests to stay inside free-plan per-minute limits.
+      const wait = nextSlot - Date.now();
+      if (wait > 0) {
+        if (Date.now() + wait - started > budget) break;
+        await new Promise((r) => setTimeout(r, wait));
+      }
+      nextSlot = Date.now() + limits.minIntervalMs;
       const item = queue.shift()!;
       const mod = await source.module(item.session.courseId);
       if (!mod) continue;
@@ -120,6 +131,11 @@ export async function runAutoNotes(source: StudySource, opts: { budgetMs?: numbe
         state.sessions[item.session.key] = { fp: item.fp, status: "done", at: Date.now() };
         generated++;
       } catch (e) {
+        if (e instanceof AiRateLimited) {
+          // Not this session's fault: leave it queued for the next run.
+          rateLimited = true;
+          break;
+        }
         const msg = e instanceof Error ? e.message : String(e);
         const isUnreadable = /nothing readable/i.test(msg);
         state.sessions[item.session.key] = { fp: item.fp, status: isUnreadable ? "unreadable" : "error", at: Date.now(), error: isUnreadable ? undefined : msg.slice(0, 200) };
@@ -130,15 +146,15 @@ export async function runAutoNotes(source: StudySource, opts: { budgetMs?: numbe
       await saveAutoNotesState(user, state);
     }
   };
-  await Promise.all(Array.from({ length: Math.max(1, opts.concurrency ?? 3) }, worker));
+  await Promise.all(Array.from({ length: Math.max(1, opts.concurrency ?? limits.concurrency) }, worker));
 
   const remaining = items.filter((i) => i.decision === "generate").length - generated - unreadable - failed;
   const withNotes = items.filter((i) => i.decision === "up-to-date" || i.decision === "kept-yours").length + generated;
-  const message = `${generated} written, ${unreadable} unreadable, ${failed} failed, ${Math.max(0, remaining)} still to do`;
+  const message = `${generated} written, ${unreadable} unreadable, ${failed} failed, ${Math.max(0, remaining)} still to do${rateLimited ? " (paused: free AI plan limit reached — continues automatically later)" : ""}`;
   state.lastRunAt = Date.now();
   state.lastRunSummary = message;
   await saveAutoNotesState(user, state);
-  return { generated, unreadable, failed, remaining: Math.max(0, remaining), total: items.length, withNotes, message };
+  return { generated, unreadable, failed, remaining: Math.max(0, remaining), total: items.length, withNotes, message, rateLimited };
 }
 
 // One run at a time per server instance; background triggers no more than every 6 hours.

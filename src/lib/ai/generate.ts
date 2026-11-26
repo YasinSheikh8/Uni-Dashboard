@@ -37,8 +37,27 @@ export function aiProviderLabel() {
 
 const MAX_PDF_BYTES = 12 * 1024 * 1024;
 const MAX_PDFS = 4;
-const MAX_SOURCE_CHARS = 30_000;
-const MAX_TOTAL_CHARS = 110_000;
+/**
+ * Request-size and pacing limits. Groq's free plan allows roughly 8,000
+ * tokens per minute for gpt-oss-120b, so on Groq each request is kept to
+ * ~15k characters of source text and ~3k output tokens, sent one at a time
+ * about a minute apart. Every value can be overridden with an env var.
+ */
+export function aiLimits() {
+  const groq = new URL(aiBaseUrl()).hostname.endsWith("groq.com");
+  const num = (v: string | undefined, d: number) => (v && Number.isFinite(Number(v)) ? Number(v) : d);
+  const maxInputChars = num(process.env.AI_MAX_INPUT_CHARS, groq ? 15_000 : 110_000);
+  return {
+    maxInputChars,
+    maxSourceChars: Math.min(30_000, maxInputChars),
+    maxOutputTokens: num(process.env.AI_MAX_OUTPUT_TOKENS, groq ? 3_000 : 12_000),
+    concurrency: num(process.env.AI_CONCURRENCY, groq ? 1 : 3),
+    minIntervalMs: num(process.env.AI_MIN_INTERVAL_MS, groq ? 62_000 : 0),
+  };
+}
+
+/** The provider's rate limit was hit; stop for now and carry on in a later run. */
+export class AiRateLimited extends Error {}
 
 export class AiUnavailable extends Error {}
 
@@ -73,10 +92,11 @@ Hard rules:
 - Reply with a single JSON object only, matching the given JSON Schema exactly. No prose, no code fences.`;
 
 function sourceText(materials: Material[]) {
-  let budget = MAX_TOTAL_CHARS;
+  const { maxInputChars, maxSourceChars } = aiLimits();
+  let budget = maxInputChars;
   return materials
     .map((m) => {
-      const body = m.text.slice(0, Math.min(MAX_SOURCE_CHARS, Math.max(0, budget)));
+      const body = m.text.slice(0, Math.min(maxSourceChars, Math.max(0, budget)));
       budget -= body.length;
       const cut = body.length < m.text.length ? "\n[…source shortened to fit]" : "";
       return `<source id="${m.id}" title="${m.title.replace(/"/g, "'")}">\n${body}${cut}\n</source>`;
@@ -117,7 +137,7 @@ async function call<T>(schema: z.ZodType<T>, materials: Material[], task: string
     { role: "system", content: RULES },
     { role: "user", content: `${sourceText(materials)}\n\nTask: ${task}\n\nJSON Schema for your reply:\n${JSON.stringify(jsonSchema)}` },
   ];
-  const base = { model: aiModel(), messages, temperature: 0.2, max_tokens: 12000 };
+  const base = { model: aiModel(), messages, temperature: 0.2, max_tokens: aiLimits().maxOutputTokens };
   let lastError = "The AI response couldn't be read.";
   for (let attempt = 0; attempt < 2; attempt++) {
     // Prefer strict schema output; fall back to plain JSON mode for providers that don't support it.
@@ -126,7 +146,9 @@ async function call<T>(schema: z.ZodType<T>, materials: Material[], task: string
     if (!r.ok) {
       if (r.status === 401 || r.status === 403) throw new AiUnavailable("The AI provider rejected the API key.");
       lastError = `The AI provider returned an error (${r.status}).`;
-      if (r.status === 429 || r.status >= 500) continue;
+      if (r.status === 429) throw new AiRateLimited("The free AI plan's rate limit was reached — the rest will be written in a later run.");
+      if (r.status === 413) throw new Error("This session's materials are too long for the AI plan's request limit.");
+      if (r.status >= 500) continue;
       throw new Error(lastError);
     }
     const content = r.data.choices?.[0]?.message?.content ?? "";
