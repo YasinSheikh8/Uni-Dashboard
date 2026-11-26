@@ -133,7 +133,7 @@ export default async function ModulePage({ params, searchParams }: { params: Pro
           </div>
           {!ai && (
             <p className="mt-4 text-sm text-subtle">
-              AI study guides are off. Add an Anthropic API key on the server to generate notes from this module&apos;s PDFs and pages (see <Link href="/settings" className="underline">Settings</Link>).
+              AI study guides are off. Add an AI_API_KEY on the server to generate notes from this module&apos;s PDFs and pages (see <Link href="/settings" className="underline">Settings</Link>).
             </p>
           )}
         </>

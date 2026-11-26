@@ -7,7 +7,7 @@ import { unitsFor } from "@/lib/sessions";
 import { upsertSessionNote } from "@/lib/store/user-data";
 
 export const maxDuration = 300;
-const Body = z.object({ courseId: z.number().int(), sessionKey: z.string().regex(/^\d+-(lecture|seminar)-\d+$/) });
+const Body = z.object({ courseId: z.number().int(), sessionKey: z.string().regex(/^\d+-(lecture|seminar|week)-\d+$/) });
 
 export async function POST(req: Request) {
   if (!sameOrigin(req)) return bad("Forbidden", 403);

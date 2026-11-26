@@ -104,3 +104,16 @@ test("lecture/seminar from Tabula titles", () => {
   assert.equal(sessionTypeFrom("IP121 Truth and Misinformation Group 1"), "seminar");
   assert.equal(sessionTypeFrom("Personal Tutor Meeting"), "other");
 });
+
+import { decide } from "../src/lib/ai/auto-notes";
+import type { Note } from "../src/lib/store/user-data";
+test("automatic notes never overwrite your own and only rerun on change", () => {
+  const base: Note = { id: "1", title: "t", body: "x", tags: [], origin: "ai", createdAt: 0, updatedAt: 0, autoFingerprint: "a" };
+  assert.equal(decide("a", undefined, undefined), "generate");
+  assert.equal(decide("a", base, undefined), "up-to-date");
+  assert.equal(decide("b", base, undefined), "generate");
+  assert.equal(decide("b", { ...base, editedByUser: true }, undefined), "kept-yours");
+  assert.equal(decide("b", { ...base, origin: "personal" }, undefined), "kept-yours");
+  assert.equal(decide("a", undefined, { fp: "a", status: "unreadable", at: 0 }), "unreadable");
+  assert.equal(decide("b", undefined, { fp: "a", status: "unreadable", at: 0 }), "generate");
+});

@@ -3,7 +3,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { CheckCircle2, CircleDashed, Link2Off, XCircle } from "lucide-react";
 import { APP_NAME } from "@/config/app";
-import { aiConfigured } from "@/lib/ai/generate";
+import { aiConfigured, aiProviderLabel } from "@/lib/ai/generate";
 import { lockConfigured } from "@/lib/auth/session";
 import { attempt, configuredMode, getSource } from "@/lib/data/source";
 import { ALLOWED_FUNCTIONS, moodleConfig } from "@/lib/moodle/client";
@@ -11,6 +11,7 @@ import { storageInfo } from "@/lib/store";
 import { getSettings, saveSettings, type UserSettings } from "@/lib/store/user-data";
 import { isAllowedFeedUrl } from "@/lib/timetable/source";
 import { ReminderSettings, ThemeControl } from "@/components/client-bits";
+import { AutoNotesPanel } from "@/components/auto-notes-panel";
 import { Badge, Card, ExternalLink, Notice, PageHeader, ProblemState } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
@@ -106,7 +107,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               Not synced. Use the official sites from <a href="/links" className="text-accent underline">Warwick links</a>.
             </Row>
             <Row ok={aiConfigured() ? true : null} label="AI study guides and action plans">
-              {aiConfigured() ? "On. Only text and PDFs from your Moodle are sent to Anthropic's API to generate them, and only when you press the button." : "Off. Set ANTHROPIC_API_KEY on the server to turn them on."}
+              {aiConfigured() ? `On — ${aiProviderLabel()}. Text from your Moodle PDFs and pages (extracted on this server) is sent to that provider to write notes, flashcards and quizzes.` : "Off. Set AI_API_KEY (an OpenRouter key by default) on the server to turn them on."}
             </Row>
           </ul>
         </Card>
@@ -134,6 +135,12 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               )}
             </form>
           )}
+        </Card>
+
+        <Card>
+          <h2 id="auto-notes" className="mb-1 scroll-mt-24 font-semibold">Automatic revision notes</h2>
+          <p className="mb-3 text-sm text-muted">Concise notes for every lecture, seminar and week, written from that session&apos;s Moodle PDFs and pages and rewritten when the materials change.</p>
+          <AutoNotesPanel />
         </Card>
 
         <Card>

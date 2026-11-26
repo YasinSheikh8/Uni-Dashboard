@@ -27,6 +27,8 @@ export interface Note extends NoteInput {
   origin: "personal" | "ai";
   /** Set once you edit an AI-generated note. */
   editedByUser?: boolean;
+  /** For automatic notes: fingerprint of the Moodle materials they were made from. */
+  autoFingerprint?: string;
   sources?: { title: string; url: string }[];
   createdAt: number;
   updatedAt: number;
@@ -185,7 +187,7 @@ export function dueCount(set: StudySet | null, p: StudyProgress, now = Date.now(
 }
 
 /** Replace (or create) the AI revision note for one lecture/seminar. */
-export async function upsertSessionNote(user: string, sessionKey: string, input: NoteInput, sources: { title: string; url: string }[]) {
+export async function upsertSessionNote(user: string, sessionKey: string, input: NoteInput, sources: { title: string; url: string }[], autoFingerprint?: string) {
   const notes = (await store().get<Note[]>(notesKey(user))) ?? [];
   const now = Date.now();
   const i = notes.findIndex((n) => n.sessionKey === sessionKey);
@@ -196,10 +198,25 @@ export async function upsertSessionNote(user: string, sessionKey: string, input:
     origin: "ai",
     editedByUser: false,
     sources,
+    autoFingerprint,
     updatedAt: now,
   } as Note;
   if (i >= 0) notes[i] = note;
   else notes.push(note);
   await store().set(notesKey(user), notes);
   return note;
+}
+
+// ---- Automatic notes state ------------------------------------------------------
+export interface AutoNotesState {
+  lastRunAt?: number;
+  lastRunSummary?: string;
+  /** Per session: the materials fingerprint last handled and what happened. */
+  sessions: Record<string, { fp: string; status: "done" | "unreadable" | "kept-yours" | "error"; at: number; error?: string }>;
+}
+export async function getAutoNotesState(user: string): Promise<AutoNotesState> {
+  return (await store().get<AutoNotesState>(`${user}:auto-notes`)) ?? { sessions: {} };
+}
+export async function saveAutoNotesState(user: string, s: AutoNotesState) {
+  await store().set(`${user}:auto-notes`, s);
 }
