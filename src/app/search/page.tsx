@@ -1,222 +1,50 @@
-import { Suspense } from "react";
 import Link from "next/link";
-import { SearchForm } from "@/components/SearchForm";
-import { HotelCard } from "@/components/HotelCard";
-import { searchHotels, type SortMode } from "@/lib/suppliers/aggregator";
+import { getSource } from "@/lib/data/source";
+import { searchAll } from "@/lib/search";
+import { Card, EmptyState, PageHeader } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Search" };
 
-interface SearchParams {
-  destination?: string;
-  checkIn?: string;
-  checkOut?: string;
-  guests?: string;
-  rooms?: string;
-  currency?: string;
-  sort?: string;
-}
+const LABEL = { module: "Modules", assessment: "Deadlines & tests", resource: "Materials", note: "Notes", link: "Warwick links" } as const;
 
-export default async function SearchPage({
-  searchParams,
-}: {
-  searchParams: Promise<SearchParams>;
-}) {
-  const params = await searchParams;
-  const query = {
-    destination: params.destination ?? "",
-    checkIn: params.checkIn ?? "",
-    checkOut: params.checkOut ?? "",
-    guests: params.guests ?? "2",
-    rooms: params.rooms ?? "1",
-    currency: params.currency ?? "EUR",
-    sort: (params.sort as SortMode) ?? "best_price",
-  };
-
-  return (
-    <div className="mx-auto max-w-5xl px-6 py-8">
-      <SearchForm defaults={query} />
-
-      <Suspense key={JSON.stringify(query)} fallback={<ResultsSkeleton />}>
-        <Results query={query} />
-      </Suspense>
-    </div>
-  );
-}
-
-async function Results({
-  query,
-}: {
-  query: {
-    destination: string;
-    checkIn: string;
-    checkOut: string;
-    guests: string;
-    rooms: string;
-    currency: string;
-    sort: SortMode;
-  };
-}) {
-  if (!query.destination || !query.checkIn || !query.checkOut) {
-    return (
-      <p className="mt-16 text-center text-sm text-[var(--color-ink-soft)]">
-        Tell us where and when.
-      </p>
-    );
-  }
-
-  const result = await searchHotels(
-    {
-      destination: query.destination,
-      checkIn: query.checkIn,
-      checkOut: query.checkOut,
-      adults: Number.parseInt(query.guests, 10) || 2,
-      rooms: Number.parseInt(query.rooms, 10) || 1,
-      currency: query.currency,
-      limit: 40,
-    },
-    query.sort,
-  );
-
-  const failed = result.diagnostics.filter((entry) => entry.status !== "ok");
-  const sortHref = (sort: SortMode) =>
-    `/search?${new URLSearchParams({ ...query, sort }).toString()}`;
-
+export default async function SearchPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
+  const { q = "" } = await searchParams;
+  const hits = q.trim().length >= 2 ? await searchAll(await getSource(), q.trim(), 30) : [];
+  const groups = (Object.keys(LABEL) as (keyof typeof LABEL)[]).map((t) => [t, hits.filter((h) => h.type === t)] as const).filter(([, l]) => l.length);
   return (
     <>
-      <div className="mt-12 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          {/* The resolved city, not the raw input — otherwise picking a
-              suggestion shows "8 stays in Lisbon, PT" and leaks an ISO code
-              at the user. */}
-          <h1 className="display text-[1.75rem]">
-            {result.hotels.length} stay{result.hotels.length === 1 ? "" : "s"} in{" "}
-            {result.resolvedCity || query.destination}
-          </h1>
-          {/* Source count, not source telemetry. Response times are a developer
-              concern and belong in the disclosure below, not in the headline. */}
-          <p className="mt-2 text-sm text-[var(--color-ink-soft)]">
-            Cheapest of {result.diagnostics.length} source
-            {result.diagnostics.length === 1 ? "" : "s"}, all taxes in
-          </p>
-          {!result.resolvedCountryCode && result.hotels.length === 0 && (
-            <p className="mt-2 text-sm text-[var(--color-warn)]">
-              We couldn&apos;t tell which country {result.resolvedCity || query.destination}{" "}
-              is in. Pick from the suggestions, or add it yourself like
-              &ldquo;{result.resolvedCity || query.destination}, PT&rdquo;.
-            </p>
-          )}
-        </div>
-
-        <div className="flex items-center gap-0.5 rounded-full bg-[var(--color-accent-soft)] p-1 text-sm">
-          <SortLink href={sortHref("best_price")} active={query.sort === "best_price"}>
-            Price
-          </SortLink>
-          <SortLink href={sortHref("rating")} active={query.sort === "rating"}>
-            Rating
-          </SortLink>
-          <SortLink href={sortHref("stars")} active={query.sort === "stars"}>
-            Stars
-          </SortLink>
-        </div>
+      <PageHeader title="Search" subtitle="Modules, materials, deadlines, notes and Warwick links." />
+      <form action="/search" className="mb-6 flex gap-2" role="search">
+        <label htmlFor="sq" className="sr-only">Search</label>
+        <input id="sq" name="q" defaultValue={q} autoFocus placeholder="Search…" className="min-h-12 min-w-0 flex-1 rounded-xl border border-line bg-surface px-4 text-base text-fg placeholder:text-subtle" />
+        <button type="submit" className="min-h-12 rounded-xl bg-accent px-5 font-medium text-on-accent hover:bg-accent-strong">Search</button>
+      </form>
+      {q.trim().length >= 2 && !hits.length && <EmptyState title={`No results for “${q}”`} />}
+      <div className="flex flex-col gap-4">
+        {groups.map(([type, list]) => (
+          <Card key={type}>
+            <h2 className="mb-2 text-sm font-semibold">{LABEL[type]}</h2>
+            <ul className="-mx-3">
+              {list.map((h, i) => (
+                <li key={i}>
+                  {h.external ? (
+                    <a href={h.href} target="_blank" rel="noopener noreferrer" className="block min-h-12 rounded-xl px-3 py-2 hover:bg-surface-2">
+                      <span className="block text-sm text-fg">{h.title}</span>
+                      {h.subtitle && <span className="block text-xs text-subtle">{h.subtitle}</span>}
+                    </a>
+                  ) : (
+                    <Link href={h.href} className="block min-h-12 rounded-xl px-3 py-2 hover:bg-surface-2">
+                      <span className="block text-sm text-fg">{h.title}</span>
+                      {h.subtitle && <span className="block text-xs text-subtle">{h.subtitle}</span>}
+                    </Link>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </Card>
+        ))}
       </div>
-
-      {failed.length > 0 && (
-        <div className="mt-5 space-y-1 text-xs text-[var(--color-warn)]">
-          {failed.map((entry) => (
-            <p key={entry.supplier}>
-              {entry.supplierLabel} didn&apos;t respond
-              {/* The reason is shown because "it didn't work" is not
-                  actionable. Supplier errors carry no credentials — the
-                  adapters throw status codes and response snippets. */}
-              {entry.error ? <span className="opacity-80"> — {entry.error}</span> : null}
-            </p>
-          ))}
-        </div>
-      )}
-
-      {result.hotels.length === 0 ? (
-        <div className="mt-16 text-center">
-          <p className="text-sm text-[var(--color-ink-soft)]">
-            Nothing available for those dates. Try shifting them a day or two.
-          </p>
-        </div>
-      ) : (
-        <div className="mt-7 grid gap-2.5">
-          {result.hotels.map((hotel, index) => (
-            <HotelCard
-              key={hotel.id}
-              hotel={hotel}
-              index={index}
-              query={{
-                checkIn: query.checkIn,
-                checkOut: query.checkOut,
-                guests: query.guests,
-                destination: query.destination,
-              }}
-            />
-          ))}
-        </div>
-      )}
-
-      {/* Kept, because being able to see which source answered and how fast is
-          genuinely useful — just not at the top of the page. */}
-      <details className="mt-14 text-xs text-[var(--color-ink-faint)]">
-        <summary className="cursor-pointer select-none hover:text-[var(--color-ink-soft)]">
-          Sources checked
-        </summary>
-        <ul className="mt-3 space-y-1.5">
-          {result.diagnostics.map((entry) => (
-            <li key={entry.supplier} className="flex justify-between gap-4">
-              <span>{entry.supplierLabel}</span>
-              <span className="tabular">
-                {entry.status === "ok"
-                  ? `${entry.hotelsReturned} hotels · ${entry.durationMs}ms`
-                  : entry.status}
-              </span>
-            </li>
-          ))}
-        </ul>
-      </details>
     </>
-  );
-}
-
-function SortLink({
-  href,
-  active,
-  children,
-}: {
-  href: string;
-  active: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <Link
-      href={href}
-      className={`rounded-full px-3.5 py-1.5 transition-colors ${
-        active
-          ? "bg-[var(--color-surface)] font-medium text-[var(--color-ink)] shadow-[var(--elev-1)]"
-          : "text-[var(--color-ink-soft)] hover:text-[var(--color-ink)]"
-      }`}
-    >
-      {children}
-    </Link>
-  );
-}
-
-function ResultsSkeleton() {
-  return (
-    <div className="mt-[6.5rem] grid gap-2.5">
-      {Array.from({ length: 5 }).map((_, index) => (
-        <div key={index} className="card flex items-center gap-5 p-3">
-          <div className="skeleton h-[132px] w-[176px] shrink-0" />
-          <div className="flex-1 space-y-3">
-            <div className="skeleton h-4 w-2/5" />
-            <div className="skeleton h-3 w-3/5" />
-          </div>
-          <div className="skeleton h-7 w-24 shrink-0" />
-        </div>
-      ))}
-    </div>
   );
 }
