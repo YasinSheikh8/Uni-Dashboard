@@ -117,3 +117,20 @@ test("automatic notes never overwrite your own and only rerun on change", () => 
   assert.equal(decide("a", undefined, { fp: "a", status: "unreadable", at: 0 }), "unreadable");
   assert.equal(decide("b", undefined, { fp: "a", status: "unreadable", at: 0 }), "generate");
 });
+
+import { findRedisRest } from "../src/lib/store";
+test("finds Upstash credentials under any Vercel prefix", () => {
+  assert.equal(findRedisRest({}), null);
+  assert.deepEqual(findRedisRest({ KV_REST_API_URL: "https://a.upstash.io", KV_REST_API_TOKEN: "t" }), { url: "https://a.upstash.io", token: "t" });
+  assert.deepEqual(findRedisRest({ STORAGE_KV_REST_API_URL: "https://b.upstash.io", STORAGE_KV_REST_API_TOKEN: "t2" }), { url: "https://b.upstash.io", token: "t2" });
+  assert.deepEqual(findRedisRest({ UPSTASH_REDIS_REST_URL: "https://c.upstash.io", UPSTASH_REDIS_REST_TOKEN: "t3" }), { url: "https://c.upstash.io", token: "t3" });
+  assert.equal(findRedisRest({ KV_REST_API_URL: "https://a.upstash.io" }), null);
+});
+
+import { findRedisUrl } from "../src/lib/store";
+test("finds a redis:// connection string", () => {
+  assert.equal(findRedisUrl({}), null);
+  assert.equal(findRedisUrl({ REDIS_URL: "redis://default:pw@host:6379" }), "redis://default:pw@host:6379");
+  assert.equal(findRedisUrl({ STORAGE_REDIS_URL: "rediss://u:p@h:1" }), "rediss://u:p@h:1");
+  assert.equal(findRedisUrl({ REDIS_URL: "https://not-tcp" }), null);
+});
