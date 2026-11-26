@@ -1,24 +1,44 @@
 import "server-only";
-import Anthropic from "@anthropic-ai/sdk";
-import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod/v4";
 import { htmlToText } from "@/lib/classify";
 import type { Assessment, ModuleDetail, Resource, Section } from "@/lib/data/model";
-import type { Session } from "@/lib/sessions";
 import type { StudySource } from "@/lib/data/source";
+import type { Session } from "@/lib/sessions";
 
 /**
- * AI study help. Rules that the code (not just the prompt) enforces:
- * - Only text and PDFs that come from the student's own Moodle are sent.
+ * AI study help, using an open-weight model (default: openai/gpt-oss-120b)
+ * through any OpenAI-compatible chat-completions API — OpenRouter by default,
+ * or Groq / Together / a self-hosted server via AI_BASE_URL.
+ *
+ * Rules that the code (not just the prompt) enforces:
+ * - Only text from the student's own Moodle is sent. PDFs are converted to
+ *   text on this server first (gpt-oss reads text only).
  * - Every output item must cite source ids; ids that weren't supplied are dropped.
+ * - The reply must match a schema; anything that doesn't is rejected.
  * - Whatever couldn't be read (e.g. PowerPoint files) is reported, not guessed at.
  */
-export function aiConfigured() {
-  return !!(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN);
+function aiKey() {
+  return process.env.AI_API_KEY || process.env.OPENROUTER_API_KEY || process.env.GROQ_API_KEY;
 }
-const MODEL = () => process.env.ANTHROPIC_MODEL || "claude-opus-5-5";
+function aiBaseUrl() {
+  if (process.env.AI_BASE_URL) return process.env.AI_BASE_URL.replace(/\/+$/, "");
+  if (!process.env.AI_API_KEY && !process.env.OPENROUTER_API_KEY && process.env.GROQ_API_KEY) return "https://api.groq.com/openai/v1";
+  return "https://openrouter.ai/api/v1";
+}
+export function aiModel() {
+  return process.env.AI_MODEL || "openai/gpt-oss-120b";
+}
+export function aiConfigured() {
+  return !!aiKey();
+}
+export function aiProviderLabel() {
+  return `${aiModel()} via ${new URL(aiBaseUrl()).hostname}`;
+}
+
 const MAX_PDF_BYTES = 12 * 1024 * 1024;
 const MAX_PDFS = 4;
+const MAX_SOURCE_CHARS = 30_000;
+const MAX_TOTAL_CHARS = 110_000;
 
 export class AiUnavailable extends Error {}
 
@@ -26,8 +46,20 @@ interface Material {
   id: string;
   title: string;
   url: string;
-  text?: string;
-  pdf?: Buffer;
+  text: string;
+}
+
+export async function pdfToText(data: Buffer): Promise<string | null> {
+  try {
+    const { extractText, getDocumentProxy } = await import("unpdf");
+    const pdf = await getDocumentProxy(new Uint8Array(data));
+    const { text } = await extractText(pdf, { mergePages: true });
+    const clean = (Array.isArray(text) ? text.join("\n") : text).replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();
+    // Scanned/image-only PDFs have no text layer: treat as unreadable rather than guess.
+    return clean.length > 80 ? clean : null;
+  } catch {
+    return null;
+  }
 }
 
 const RULES = `You help a University of Warwick student study, using ONLY the numbered source materials provided from their Moodle course.
@@ -36,37 +68,77 @@ Hard rules:
 - Use only facts stated in the sources. Do not add outside knowledge, examples, readings, dates, deadlines, weightings, word counts, marking criteria or lecturer instructions that are not in the sources.
 - Every item must cite the ids (e.g. "S2") of the sources it is based on. If nothing in the sources supports an item, leave it out.
 - If the sources are thin, produce fewer items. An empty list is better than an invented one.
-- Put anything a student would need but the sources don't give into "gaps" (e.g. "The slides for this week weren't readable", "No reading list is included").
-- British English. Plain, direct study language.`;
+- Put anything a student would need but the sources don't give into "gaps".
+- British English. Plain, direct study language.
+- Reply with a single JSON object only, matching the given JSON Schema exactly. No prose, no code fences.`;
 
-function sourceBlock(materials: Material[]) {
-  const content: Anthropic.Beta.BetaContentBlockParam[] = [];
-  for (const m of materials) {
-    if (m.pdf) {
-      content.push({ type: "text", text: `Source ${m.id}: "${m.title}" (PDF follows)` });
-      content.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: m.pdf.toString("base64") }, title: `${m.id}: ${m.title}` });
-    } else if (m.text) {
-      content.push({ type: "text", text: `Source ${m.id}: "${m.title}"\n${m.text.slice(0, 40_000)}` });
-    }
-  }
-  return content;
+function sourceText(materials: Material[]) {
+  let budget = MAX_TOTAL_CHARS;
+  return materials
+    .map((m) => {
+      const body = m.text.slice(0, Math.min(MAX_SOURCE_CHARS, Math.max(0, budget)));
+      budget -= body.length;
+      const cut = body.length < m.text.length ? "\n[…source shortened to fit]" : "";
+      return `<source id="${m.id}" title="${m.title.replace(/"/g, "'")}">\n${body}${cut}\n</source>`;
+    })
+    .join("\n\n");
+}
+
+function parseJson(text: string): unknown {
+  const t = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "");
+  const start = t.indexOf("{");
+  const end = t.lastIndexOf("}");
+  return JSON.parse(start >= 0 && end > start ? t.slice(start, end + 1) : t);
+}
+
+async function chat(body: Record<string, unknown>) {
+  const res = await fetch(`${aiBaseUrl()}/chat/completions`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${aiKey()}`,
+      "Content-Type": "application/json",
+      // OpenRouter attribution headers (ignored by other providers).
+      "X-Title": "Study dashboard",
+    },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(240_000),
+  });
+  const data = (await res.json().catch(() => ({}))) as {
+    choices?: { message?: { content?: string | null }; finish_reason?: string }[];
+    error?: { message?: string };
+  };
+  return { ok: res.ok, status: res.status, data };
 }
 
 async function call<T>(schema: z.ZodType<T>, materials: Material[], task: string): Promise<T> {
-  if (!aiConfigured()) throw new AiUnavailable("AI generation is not configured (ANTHROPIC_API_KEY).");
-  const client = new Anthropic();
-  const response = await client.beta.messages.parse({
-    model: MODEL(),
-    max_tokens: 16000,
-    betas: ["server-side-fallback-2026-07-01"],
-    fallbacks: "default",
-    output_config: { effort: "medium", format: betaZodOutputFormat(schema) },
-    system: RULES,
-    messages: [{ role: "user", content: [...sourceBlock(materials), { type: "text", text: task }] }],
-  });
-  if (response.stop_reason === "refusal") throw new Error("The AI declined to generate this. Try again or write your own notes.");
-  if (!response.parsed_output) throw new Error("The AI response couldn't be read. Try again.");
-  return response.parsed_output;
+  if (!aiConfigured()) throw new AiUnavailable("AI generation is not configured (set AI_API_KEY).");
+  const jsonSchema = z.toJSONSchema(schema);
+  const messages = [
+    { role: "system", content: RULES },
+    { role: "user", content: `${sourceText(materials)}\n\nTask: ${task}\n\nJSON Schema for your reply:\n${JSON.stringify(jsonSchema)}` },
+  ];
+  const base = { model: aiModel(), messages, temperature: 0.2, max_tokens: 12000 };
+  let lastError = "The AI response couldn't be read.";
+  for (let attempt = 0; attempt < 2; attempt++) {
+    // Prefer strict schema output; fall back to plain JSON mode for providers that don't support it.
+    let r = await chat({ ...base, response_format: { type: "json_schema", json_schema: { name: "study_output", strict: true, schema: jsonSchema } } });
+    if (!r.ok && r.status === 400) r = await chat({ ...base, response_format: { type: "json_object" } });
+    if (!r.ok) {
+      if (r.status === 401 || r.status === 403) throw new AiUnavailable("The AI provider rejected the API key.");
+      lastError = `The AI provider returned an error (${r.status}).`;
+      if (r.status === 429 || r.status >= 500) continue;
+      throw new Error(lastError);
+    }
+    const content = r.data.choices?.[0]?.message?.content ?? "";
+    try {
+      const parsed = schema.safeParse(parseJson(content));
+      if (parsed.success) return parsed.data;
+      lastError = "The AI reply didn't match the expected format.";
+    } catch {
+      lastError = r.data.choices?.[0]?.finish_reason === "length" ? "The AI reply was cut off — the materials may be too long." : "The AI reply wasn't valid JSON.";
+    }
+  }
+  throw new Error(lastError);
 }
 
 async function gatherResources(source: StudySource, mod: ModuleDetail, resources: Resource[], section?: Section) {
@@ -88,9 +160,10 @@ async function gatherResources(source: StudySource, mod: ModuleDetail, resources
     const pdf = r.files.find((f) => f.mimeType === "application/pdf");
     if (pdf && pdfs < MAX_PDFS && (pdf.size ?? 0) <= MAX_PDF_BYTES) {
       const file = await source.download(pdf, MAX_PDF_BYTES);
-      if (file) {
+      const text = file ? await pdfToText(file.data) : null;
+      if (text) {
         pdfs++;
-        materials.push({ id: id(), title: r.title, url: r.url, pdf: file.data });
+        materials.push({ id: id(), title: r.title, url: r.url, text });
         continue;
       }
     }
@@ -104,7 +177,7 @@ async function gatherResources(source: StudySource, mod: ModuleDetail, resources
 const gatherSection = (source: StudySource, mod: ModuleDetail, section: Section) => gatherResources(source, mod, section.resources, section);
 
 const NOTHING_READABLE =
-  "There's nothing readable here yet (no PDFs, pages or descriptions — PowerPoint files and videos can't be read), so nothing can be generated without guessing.";
+  "There's nothing readable here yet (no text PDFs, pages or descriptions — PowerPoint files, scanned PDFs and videos can't be read), so nothing can be generated without guessing.";
 
 const Cited = z.object({ text: z.string(), sources: z.array(z.string()) });
 const GuideSchema = z.object({
@@ -178,7 +251,8 @@ export async function generateActionPlan(source: StudySource, a: Assessment) {
   materials.push({ id: `S${materials.length + 1}`, title: "Moodle settings for this activity", url: a.url, text: facts });
   for (const f of a.attachments.filter((x) => x.mimeType === "application/pdf").slice(0, 2)) {
     const file = await source.download(f, MAX_PDF_BYTES);
-    if (file) materials.push({ id: `S${materials.length + 1}`, title: f.name, url: a.url, pdf: file.data });
+    const text = file ? await pdfToText(file.data) : null;
+    if (text) materials.push({ id: `S${materials.length + 1}`, title: f.name, url: a.url, text });
   }
   const out = await call(
     PlanSchema,

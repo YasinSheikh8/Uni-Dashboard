@@ -14,7 +14,7 @@ export interface Session {
   sectionId: number;
   sectionName: string;
   week?: number;
-  kind: "lecture" | "seminar";
+  kind: "lecture" | "seminar" | "week";
   label: string;
   resources: Resource[];
 }
@@ -77,6 +77,9 @@ export function unitsFor(mod: ModuleDetail): Unit[] {
     const firstLecture = sessions.find((s) => s.kind === "lecture");
     if (firstLecture) firstLecture.resources.push(...readings);
     const studyResources = visible.filter((r) => ["slides", "reading", "exercise", "seminar", "page", "file"].includes(r.kind));
+    // A week with materials but no lecture/seminar items still gets one notes slot for the week.
+    if (!sessions.length && studyResources.length && !NON_UNIT.test(section.name.trim()))
+      sessions.push({ key: `${section.id}-week-0`, courseId: mod.id, sectionId: section.id, sectionName: section.name, week: section.week, kind: "week", label: "Week materials", resources: studyResources });
     if (!sessions.length && (NON_UNIT.test(section.name.trim()) || !studyResources.length)) continue;
     if (NON_UNIT.test(section.name.trim()) && !sessions.length) continue;
     units.push({ section, label: unitLabel(section), sessions, studyResources });

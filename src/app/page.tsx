@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { after } from "next/server";
+import { maybeRunInBackground } from "@/lib/ai/auto-notes";
 import { ArrowRight, Brain, BookOpen, CalendarDays, ClipboardCheck, FileText, Link2, ListTodo, NotebookPen, Sparkles, Sun } from "lucide-react";
 import { MATERIAL_KINDS } from "@/lib/classify";
 import { attempt, getSource } from "@/lib/data/source";
@@ -11,6 +13,7 @@ import { Badge, Card, CardHeader, EmptyState, ExternalLink, Notice, PageHeader, 
 import { RefreshButton } from "@/components/client-bits";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 300;
 
 function greeting() {
   const h = londonParts(Date.now()).hour;
@@ -19,6 +22,8 @@ function greeting() {
 
 export default async function Home() {
   const source = await getSource();
+  // Keep revision notes current without making you wait: runs after the page is sent.
+  after(() => maybeRunInBackground(source));
   const now = Date.now();
   const today = londonDateKey(now);
   const { start, end } = londonDayRange(today);

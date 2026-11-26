@@ -9,7 +9,7 @@ import { AiTag, cx } from "./ui";
 export interface SessionView {
   key: string;
   label: string;
-  kind: "lecture" | "seminar";
+  kind: "lecture" | "seminar" | "week";
   courseId: number;
   week?: number;
   sectionName: string;
@@ -56,8 +56,8 @@ export function SessionNoteCard({ s, aiAvailable, reviewMode }: { s: SessionView
   return (
     <article className="depth-card rounded-2xl border border-line bg-surface">
       <header className="flex items-start gap-3 p-4">
-        <span className={cx("chip-3d mt-0.5 shrink-0 rounded-lg px-2 py-1 text-[0.7rem] font-semibold uppercase tracking-wide", s.kind === "lecture" ? "bg-accent-soft text-accent" : "bg-ok-soft text-ok")}>
-          {s.kind === "lecture" ? "Lecture" : "Seminar"}
+        <span className={cx("chip-3d mt-0.5 shrink-0 rounded-lg px-2 py-1 text-[0.7rem] font-semibold uppercase tracking-wide", s.kind === "lecture" ? "bg-accent-soft text-accent" : s.kind === "week" ? "bg-warn-soft text-warn" : "bg-ok-soft text-ok")}>
+          {s.kind === "lecture" ? "Lecture" : s.kind === "week" ? "Week" : "Seminar"}
         </span>
         <div className="min-w-0 flex-1">
           <h3 className="font-medium text-fg">{s.label}</h3>
