@@ -1,6 +1,6 @@
 /**
- * App lock. This is a single-person app holding a Moodle token on the server,
- * so every page and API route sits behind a passcode (APP_PASSCODE). The
+ * Optional app lock. Set APP_PASSCODE to put every page and API route behind
+ * a passcode; leave it unset for no password. The
  * session is an HMAC-signed cookie; uses Web Crypto so it runs in middleware.
  */
 export const SESSION_COOKIE = "w1_session";
@@ -17,9 +17,9 @@ export function lockConfigured(): boolean {
   return !!process.env.APP_PASSCODE;
 }
 
-/** Without a passcode, the app is only open in local development. */
+/** The passcode is optional: with no APP_PASSCODE set, the app is open to anyone who has its address. */
 export function lockBypassed(): boolean {
-  return !lockConfigured() && process.env.NODE_ENV !== "production";
+  return !lockConfigured();
 }
 
 async function hmac(data: string): Promise<string> {

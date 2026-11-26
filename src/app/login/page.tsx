@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { APP_NAME } from "@/config/app";
 import { lockConfigured } from "@/lib/auth/session";
 import { Logo } from "@/components/nav";
@@ -9,6 +10,7 @@ export const dynamic = "force-dynamic";
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string; error?: string }> }) {
   const sp = await searchParams;
   const next = sp.next?.startsWith("/") && !sp.next.startsWith("//") ? sp.next : "/";
+  if (!lockConfigured()) redirect(next);
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto bg-canvas p-4">
       <div className="w-full max-w-sm rounded-2xl border border-line bg-surface p-6 shadow-card">

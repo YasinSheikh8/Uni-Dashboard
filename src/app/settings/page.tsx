@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { CheckCircle2, CircleDashed, Link2Off, XCircle } from "lucide-react";
 import { APP_NAME } from "@/config/app";
 import { aiConfigured } from "@/lib/ai/generate";
-import { lockBypassed, lockConfigured } from "@/lib/auth/session";
+import { lockConfigured } from "@/lib/auth/session";
 import { attempt, configuredMode, getSource } from "@/lib/data/source";
 import { ALLOWED_FUNCTIONS, moodleConfig } from "@/lib/moodle/client";
 import { storageInfo } from "@/lib/store";
@@ -149,8 +149,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         <Card>
           <h2 className="mb-1 font-semibold">Privacy & storage</h2>
           <ul className="divide-y divide-line">
-            <Row ok={lockConfigured() ? true : lockBypassed() ? null : false} label="App lock">
-              {lockConfigured() ? "Protected by your passcode." : lockBypassed() ? "No APP_PASSCODE set — the app is open because it's running in development. Set one before deploying." : "No APP_PASSCODE set, so the app is locked for everyone."}
+            <Row ok={lockConfigured() ? true : null} label="App lock">
+              {lockConfigured() ? "Protected by your passcode." : "Off — no password. Anyone who has this app's web address can see your Moodle data and notes. Set APP_PASSCODE on the server to turn a passcode back on."}
             </Row>
             <Row ok={!storage.persistentWarning} label={`Your notes are stored ${storage.kind === "upstash" ? "in your Upstash Redis database" : "in a file on the server"}`}>
               {storage.persistentWarning ?? "Moodle data isn't stored — it's fetched live and cached in memory for a few minutes."}
