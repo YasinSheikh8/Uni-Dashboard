@@ -52,6 +52,13 @@ In Tabula, open your profile → **Timetable** → the calendar subscription (iC
 | AI notes, flashcards, quizzes, action plans | gpt-oss-120b, from your Moodle PDFs and pages only |
 | Tabula coursework, marks, attendance; exam timetable; My Warwick; email | **Not synced** — linked only |
 
+## Free AI key (Groq)
+
+1. Sign up at [console.groq.com](https://console.groq.com) and create an API key under **API Keys**.
+2. In Vercel, add `GROQ_API_KEY` with that key, then redeploy.
+
+On Groq the app automatically keeps each request under the free plan's limits (about 8,000 tokens per minute and 200,000 per day for gpt-oss-120b). It sends one request at a time, about a minute apart, and uses up to ~15k characters of each session's materials. That's roughly 25–30 notes a day. A big backlog fills in over a few days, and when the daily limit is hit it pauses and carries on later. A paid plan or another provider (`AI_API_KEY` + `AI_BASE_URL`) removes these limits; tune with `AI_MAX_INPUT_CHARS`, `AI_MAX_OUTPUT_TOKENS`, `AI_CONCURRENCY` and `AI_MIN_INTERVAL_MS`.
+
 ## Automatic revision notes
 
 With `AI_API_KEY` set, the app writes concise notes for every lecture, seminar and week that has materials on Moodle. It rewrites a note when that session's materials change. Notes you wrote yourself, or edited, are never overwritten.
