@@ -22,7 +22,7 @@ With no `MOODLE_TOKEN` the app runs in **demo mode**: sample data, labelled on e
 
 | Variable | Required | What it is |
 |---|---|---|
-| `APP_PASSCODE` | **Yes in production** | Unlocks the app. Without it a production deployment stays locked. |
+| `APP_PASSCODE` | No | Optional passcode. Unset = no password, so anyone with the URL can see your data; keep the URL private or set one. |
 | `SESSION_SECRET` | Recommended | 32+ random chars for signing the session cookie (`openssl rand -hex 32`). |
 | `MOODLE_TOKEN` | For live data | Your Moodle web-service token (see below). |
 | `MOODLE_URL` | No | Defaults to `https://moodle.warwick.ac.uk`. |
@@ -58,7 +58,7 @@ In Tabula, open your profile → **Timetable** → the calendar subscription (iC
 ```bash
 npm ci
 npm run build
-APP_PASSCODE=... SESSION_SECRET=... MOODLE_TOKEN=... npm start
+MOODLE_TOKEN=... npm start
 ```
 
 Keep `.data/` on a persistent volume, or set `DATA_DIR`.
