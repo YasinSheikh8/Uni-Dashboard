@@ -4,6 +4,7 @@ import Link from "next/link";
 import { FlaskConical, Radio } from "lucide-react";
 import { APP_DESCRIPTION, APP_NAME } from "@/config/app";
 import { configuredMode } from "@/lib/data/source";
+import { storageInfo } from "@/lib/store";
 import { BottomNav, Sidebar, TopBar } from "@/components/nav";
 import { SearchPalette } from "@/components/search-palette";
 import { RegisterServiceWorker, ReminderAgent } from "@/components/client-bits";
@@ -55,6 +56,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               <div className="border-b border-warn/30 bg-warn-soft px-4 py-2 text-center text-sm text-fg" role="status">
                 You&apos;re viewing <strong>sample data</strong>. Nothing here is from your Moodle account.{" "}
                 <Link href="/settings" className="text-warn underline underline-offset-2">Connect Moodle</Link>
+              </div>
+            )}
+            {storageInfo().persistentWarning && (
+              <div className="border-b border-warn/30 bg-warn-soft px-4 py-2 text-center text-sm text-fg" role="status">
+                <strong>Notes aren&apos;t being saved permanently.</strong> Connect a Redis database to this project in Vercel (Storage), then redeploy.{" "}
+                <Link href="/settings" className="text-warn underline underline-offset-2">Details</Link>
               </div>
             )}
             <main id="main" className="mx-auto w-full max-w-6xl flex-1 px-4 pb-28 pt-6 sm:px-6 lg:px-10 lg:pb-12 lg:pt-10">

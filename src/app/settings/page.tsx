@@ -159,7 +159,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             <Row ok={lockConfigured() ? true : null} label="App lock">
               {lockConfigured() ? "Protected by your passcode." : "Off — no password. Anyone who has this app's web address can see your Moodle data and notes. Set APP_PASSCODE on the server to turn a passcode back on."}
             </Row>
-            <Row ok={!storage.persistentWarning} label={`Your notes are stored ${storage.kind === "upstash" ? "in your Upstash Redis database" : "in a file on the server"}`}>
+            <Row ok={!storage.persistentWarning} label={`Your notes are stored ${storage.kind === "upstash" ? "in your Upstash Redis database" : storage.kind === "redis" ? "in your Redis database" : "in a file on the server"}`}>
               {storage.persistentWarning ?? "Moodle data isn't stored — it's fetched live and cached in memory for a few minutes."}
             </Row>
           </ul>
