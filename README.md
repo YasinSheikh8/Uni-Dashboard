@@ -1,351 +1,82 @@
-# BKR
+# Yasin's Dashboard
 
-Hotel booking that prices every supplier at once, books in a single tap, and
-splits the bill with whoever is coming.
+A personal, mobile-first study hub for the University of Warwick. It brings together Moodle modules, lecture materials, deadlines and tests, your Tabula timetable, revision notes, flashcards and quizzes, and Warwick links.
 
-Three things carry the product:
-
-1. **Best price across suppliers.** Every configured supplier is queried in
-   parallel, the same physical hotel is matched across their different ids and
-   collapsed into one result row, and the cheapest all-in total wins. The losing
-   quote is shown next to it rather than hidden.
-2. **One-tap booking.** Traveler details and a card are saved once. After that,
-   booking is a single request — no forms, no re-entry.
-3. **Hybrid split payments.** The organizer's card guarantees the room
-   instantly. Friends settle up afterwards without the reservation ever waiting
-   on them.
-
-Everything happens on the platform. Rooms are sold through our own booking
-engine, and cards are collected in place against a Stripe SetupIntent — there is
-no hand-off to a hosted checkout page and no link out to a supplier's site
-anywhere in the product.
-
----
+- **Next.js 15 (App Router) + React 19 + Tailwind CSS 4 + TypeScript.** All data access runs on the server.
+- **Moodle Web Services (REST)** provide course data. The app is read-only: it can call only the 10 functions listed in `src/lib/moodle/client.ts`.
+- **Tabula's iCal calendar feed** provides lectures and seminars.
+- **Claude API** generates the optional AI study guides, concise lecture notes, flashcards, quizzes and assessment plans. Each item cites the Moodle file it came from.
+- Rename it with `NEXT_PUBLIC_APP_NAME` (default in `src/config/app.ts`).
 
 ## Quick start
 
 ```bash
 npm install
-cp .env.example .env          # then set SESSION_SECRET
-npm run db:push               # creates prisma/dev.db
-npm run dev
+cp .env.example .env.local   # fill in the values below
+npm run dev                  # http://localhost:3000
 ```
 
-It runs with **no API keys at all**. With no supplier credentials configured,
-two built-in demo suppliers with deliberately disagreeing prices are registered,
-so the cross-supplier matching and best-price logic run for real. With no Stripe
-key, a stub payment gateway stands in and no money moves.
+With no `MOODLE_TOKEN` the app runs in **demo mode**: sample data, labelled on every page and never mixed with real data.
 
-Add real credentials to `.env` whenever you want:
+## Configuration (server-side only — never commit `.env.local`)
 
-| Variable | Gets you |
-|---|---|
-| `LITEAPI_KEY` | Live, bookable hotel rates. Instant free sandbox key at [dashboard.liteapi.travel](https://dashboard.liteapi.travel). |
-| `AMADEUS_CLIENT_ID` / `AMADEUS_CLIENT_SECRET` | Second live source to compare against. Instant free key at [developers.amadeus.com](https://developers.amadeus.com). |
-| `STRIPE_SECRET_KEY` | Real cards, real holds, real charges. |
-
-The moment one supplier key is present the demo suppliers drop out. Set
-`USE_FIXTURE_SUPPLIER=true` to force them back on.
-
----
-
-## How the best-price engine works
-
-```
-        ┌───────────┐   ┌───────────┐
-query → │  LiteAPI  │   │  Amadeus  │  … parallel, independent, 9s timeout each
-        └─────┬─────┘   └─────┬─────┘
-              │               │
-              └───────┬───────┘
-                      ▼
-              normalize to RateQuote      minor units, all-in totals
-                      ▼
-              match across suppliers      geo + fuzzy name  (src/lib/suppliers/match.ts)
-                      ▼
-              one row per real hotel      cheapest wins, runner-up shown
-```
-
-The parts worth knowing:
-
-- **Comparison is on the all-in total for the whole stay**, taxes and fees
-  included — not the nightly headline rate. Comparing headline rates is how
-  booking sites end up "cheapest" right until checkout.
-- **Property matching** (`src/lib/suppliers/match.ts`) is what makes the
-  comparison meaningful. LiteAPI's `lp1a2b3` and Amadeus's `MCLONGHM` can be the
-  same building. Two hotels within 150m whose normalized names are similar
-  enough are merged; without coordinates it falls back to strict name matching
-  inside one city. Get it wrong one way and you list a hotel twice; the other
-  way and you claim a saving between two different properties.
-- **A slow or broken supplier degrades the result set, never fails the search.**
-  Failures surface in `diagnostics` and as a note above the results.
-- **Currency**: every supplier is asked to quote in the search currency, so
-  conversion is normally a no-op. The static fallback table in
-  `currency.ts` exists only for suppliers that ignore the request — replace it
-  with a real FX feed before this touches production money.
-
-### A note on the Hugging Face model
-
-The original plan named `paradiseX2673/hotel-price-scraper` on Hugging Face as
-the price source. That is not a workable foundation and it isn't used here.
-Hugging Face hosts model weights; live hotel rates are real-time inventory that
-changes by the minute, so no model can produce a price you can actually book
-against. Supplier APIs are the only source of bookable rates.
-
-ML does have a real place in this codebase, just not there — property matching
-across suppliers is currently heuristic and would be materially better as a
-learned model, and "is this a good deal versus this hotel's own history" needs a
-price history that this system is now positioned to accumulate.
-
----
-
-## How split payments work
-
-The hybrid model, in order:
-
-| When | Organizer | Friends |
+| Variable | Required | What it is |
 |---|---|---|
-| Books | own share **captured**, friends' total **held** as a backstop | invited |
-| Friend accepts | — | their share **held** on their own card |
-| Settlement | backstop **partially captured** for whatever nobody paid, remainder **released** | accepted holds **captured** |
+| `APP_PASSCODE` | No | Optional passcode. Unset = no password, so anyone with the URL can see your data; keep the URL private or set one. |
+| `SESSION_SECRET` | Recommended | 32+ random chars for signing the session cookie (`openssl rand -hex 32`). |
+| `MOODLE_TOKEN` | For live data | Your Moodle web-service token (see below). |
+| `MOODLE_URL` | No | Defaults to `https://moodle.warwick.ac.uk`. |
+| `TIMETABLE_ICS_URL` | No | Your Tabula timetable iCal link. You can also paste it in Settings. |
+| `ANTHROPIC_API_KEY` | No | Turns on the AI features. `ANTHROPIC_MODEL` defaults to `claude-opus-5-5`. |
+| `UPSTASH_REDIS_REST_URL` / `_TOKEN` | On serverless hosts | Where your notes, flashcards and checklists are kept. Without them, a JSON file in `.data/` (or `DATA_DIR`) is used. |
 
-Why a backstop rather than billing the organizer later: an authorization proves
-the funds exist at booking time. Finding out three days later that the organizer
-can't cover a no-show friend is how you eat the cost of a confirmed room.
+### Getting the Moodle token
+1. Moodle → your profile menu → **Preferences → Security keys** (`/user/managetoken.php`).
+2. Copy the key for **Moodle mobile web service**. If none is listed, sign in once with the official Moodle mobile app, which creates it.
+3. Put it in `MOODLE_TOKEN` on the server. The token gives the same read access as your own Moodle login. The app limits itself further, to read-only calls.
+4. If the token ever leaks, reset it on the same page and update the server.
 
-Two consequences that matter:
+A narrower token is possible if Warwick IT creates a dedicated external service with only the functions in `src/lib/moodle/client.ts`. Students can't create one themselves.
 
-- **`npm run settle` must run on a schedule.** Card authorizations expire after
-  about seven days; an expired hold is uncollectible. Hourly cron is plenty.
-  `SPLIT_SETTLEMENT_HOURS` (default 72) is clamped to 144 so it can never be
-  scheduled past the expiry window.
-- **Money never moves between users.** The platform charges every participant
-  and the platform pays the supplier. That keeps this out of peer-to-peer money
-  transmission and means no Stripe Connect. If you ever let an organizer collect
-  and reimburse friends directly, that changes, and it becomes a licensing
-  question before it's an engineering one.
+### Getting the Tabula timetable feed
+In Tabula, open your profile → **Timetable** → the calendar subscription (iCal) link. Treat it like a password.
 
-Split arithmetic uses largest-remainder allocation, so shares are always
-integers that sum to exactly the total. Naive rounding leaves you a cent short
-on the charge, which reconciles into a real bug.
+## What comes from where
 
-
----
-
-## Signing in
-
-Four ways in, one account, one screen:
-
-| Method | Needs |
+| Feature | Source |
 |---|---|
-| Google | `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET` |
-| Apple | `APPLE_CLIENT_ID`, `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY` (paid Apple Developer account) |
-| Phone | `TWILIO_*` — works without it in development, printing the code to the server log |
-| Email + password | nothing |
+| Modules, sections, materials, Moodle quizzes and assignments, Moodle calendar | Moodle API |
+| Lectures, seminars, rooms; revision slots per timetabled session | Tabula iCal feed |
+| Notes, revision notes, flashcards, quiz scores, checklists | This app's own store |
+| AI notes, flashcards, quizzes, action plans | Claude, from your Moodle PDFs and pages only |
+| Tabula coursework, marks, attendance; exam timetable; My Warwick; email | **Not synced** — linked only |
 
-Built on Auth.js so OAuth state, PKCE and nonce handling are not hand-rolled.
-Sessions are JWT, because the phone and password routes are credentials-based
-and the database-session strategy does not support those. Provider buttons only
-render when that provider is fully configured, so a half-set provider never
-shows a button that dies at the redirect — and the preflight warns when one is
-partially set.
+## Deploying
 
-Details worth knowing:
-
-- **There is no separate sign-up page.** Google, Apple and phone create the
-  account on first use. `/signup` redirects to `/signin`.
-- **Apple's client secret is generated at runtime** from the `.p8` key rather
-  than pasted in as a pre-made token. Apple's secrets expire after six months,
-  and the usual failure is discovering that months later when sign-in breaks.
-- **Accounts may have no email.** Phone sign-in and Apple's "hide my email" both
-  produce one. That is why `User.email` and `BookingParticipant.email` are
-  nullable and participants are matched on `userId` first
-  (`src/lib/participants.ts`). Suppliers still need somewhere to send the
-  confirmation, so the traveler profile asks for a contact address — and only
-  asks when the account itself has none.
-- **Phone codes are hashed at rest**, single-use, 5-minute expiry, 5 attempts,
-  rate limited per number, and compared in constant time. Requesting a new code
-  invalidates the previous one so the guessing surface cannot be widened.
-
----
-
-## Setup wizard
-
-New accounts land on `/setup`, which asks one thing per screen rather than
-presenting a wall of fields.
-
-Two rules shape it:
-
-- **Never ask what we already know.** The step list is derived from the account
-  (`src/lib/onboarding.ts`), so a Google user is not asked their name, a phone
-  user is not asked their number, and only an account with no email is asked for
-  a confirmation address.
-- **Never trap anyone.** Each step commits on its own, so leaving halfway loses
-  nothing and returning resumes in place. Optional steps say so.
-
-One subtlety worth knowing if you touch it: the step list is **frozen on mount**.
-It is derived from the same account data the steps write to, so letting it update
-live meant saving your name removed the name step, shrank the list, and slid the
-index onto the wrong question — answering "what's your name?" skipped straight
-past "your phone number".
-
----
-
-## Hotel rewards
-
-Guests can store loyalty memberships (`src/lib/loyalty.ts` has the programme
-catalogue). At booking time the hotel is matched to a programme — by supplier
-chain code where available, otherwise by brand tokens in the hotel name — and
-the matching membership number is attached to the reservation.
-
-**What this does not do is earn points.** Chains generally exclude rates booked
-through third parties from their loyalty programmes, so promising points or
-guaranteed upgrades would be false. What it does do is put the membership and
-tier in front of the property, which is where discretionary upgrades and late
-check-out actually get decided. The UI says exactly this rather than implying
-otherwise.
-
-Membership numbers are format-validated per programme before being stored.
-
----
-
-## Price-reference scraping
-
-Off by default. `SCRAPER_ENABLED=true` plus `SCRAPER_TARGETS=booking,hotels`
-adds public listing prices to the comparison.
-
-**Scraped prices are an internal signal and are never shown to customers.**
-There is no rate token behind a number lifted off a search page, so:
-
-- the aggregator picks the winner from *bookable* quotes only — a cheaper
-  scraped price never becomes the thing you buy;
-- `savedAmount` is computed against bookable sources only, so we never claim a
-  saving over something we cannot sell;
-- a hotel whose every quote is reference-only is **dropped from results
-  entirely**, because listing it would put a competitor's price and an off-site
-  link in front of the customer;
-- `createBooking` rejects a non-bookable provider outright, so a hand-crafted
-  request cannot route around the above.
-
-`cheaperElsewhere` is still computed and the full quote set is still stored on
-the booking, but neither is rendered. They exist for your own pricing
-intelligence — "how often are we beaten, and by how much" — not for the guest.
-
-What the scraper does technically: reads schema.org JSON-LD — the structured
-data sites publish for search engines — rather than pattern-matching rendered
-markup, which survives redesigns far better. Per target it fetches and honours
-robots.txt (**fail-closed**: unreadable robots.txt means no fetch), serializes
-requests per host with a minimum gap that yields to the site's own
-`Crawl-delay`, caches results, and sends an identifiable User-Agent.
-
-Be clear-eyed about it: scraping a booking site's search results is very likely
-against its terms of service however politely it is done, the markup can change
-without notice, and the prices are not transactable. Good crawler hygiene makes
-this well-behaved, not permitted. Treat it as a signal for your own pricing.
-
-Adding a target is a `buildUrl` function in `TARGETS`
-(`src/lib/suppliers/scraper/provider.ts`).
-
----
-
-## Deploying to Vercel
-
-1. **vercel.com → Add New → Project → import this repo.** Next.js is detected
-   automatically; no build settings to change.
-2. **Add a Postgres database.** Project → Storage → Neon (or Supabase). The
-   integration sets `DATABASE_URL` for you. If you create the database yourself
-   instead, see the `DIRECT_URL` note below.
-3. **Add the environment variables** under Project → Settings → Environment
-   Variables, then redeploy.
-
-Three things specific to this app:
-
-- **`DIRECT_URL` is required when `DATABASE_URL` is pooled.** Neon and Supabase
-  both hand you the pooled string by default (a `-pooler` host on Neon, port 6543
-  on Supabase), and connection poolers cannot run DDL — the build's schema push
-  would hang against it. `DIRECT_URL` is the same string unpooled. The build
-  refuses to start if this is wrong, rather than failing halfway through.
-
-- **Settlement runs from `vercel.json`.** The cron hits `/api/cron/settle`, and
-  Vercel automatically sends `Authorization: Bearer $CRON_SECRET` on cron
-  invocations — so setting `CRON_SECRET` is the only wiring needed. The schedule
-  is daily (`0 3 * * *`) because Hobby plans allow one cron per day; that is well
-  inside the ~7-day card-authorization window, but on Pro you can raise it to
-  hourly. Without this schedule running, holds expire uncollected.
-
-- **Security headers live in `next.config.ts`,** not in a platform config file,
-  so they survive a change of host.
-
-Required: `DATABASE_URL`, `DIRECT_URL`, `SESSION_SECRET`. Recommended:
-`CRON_SECRET`, `NEXT_PUBLIC_APP_URL`, plus whichever supplier and Stripe keys
-you are using.
-
----
-
-## Layout
-
-```
-src/lib/suppliers/     rate sources and the aggregation engine
-  types.ts             normalized shapes — nothing downstream sees supplier fields
-  liteapi.ts           LiteAPI adapter (search + prebook/book)
-  amadeus.ts           Amadeus Self-Service adapter
-  fixture.ts           deterministic demo suppliers
-  match.ts             cross-supplier property matching
-  aggregator.ts        parallel fan-out, dedup, best-price selection
-  scraper/             price-reference scraping (off by default)
-    robots.ts          robots.txt fetch/parse/evaluate, fail-closed
-    throttle.ts        per-host request pacing
-    jsonld.ts          schema.org extraction
-    provider.ts        targets + the non-bookable RateProvider
-src/lib/
-  booking.ts           booking engine: hold → sell → capture
-  split.ts             share computation and the settlement state machine
-  payments.ts          Stripe gateway + development stub behind one interface
-  money.ts             minor units, largest-remainder splitting
-src/app/               Next.js App Router pages and API routes
-tests/                 money, matching, scraping and aggregation invariants
-scripts/settle.ts      settlement sweep (run on a schedule)
-scripts/e2e-split.ts   end-to-end walk of the whole money path
-vercel.json            settlement cron schedule
-```
-
-## Commands
+**Any Node host (simplest, keeps notes on disk):**
 
 ```bash
-npm run dev        # dev server
-npm run build      # production build
-npm test           # money + matching invariants
-npm run settle     # settlement sweep — put this on a cron
-npm run e2e        # end-to-end money path against the local database
-npm run db:studio  # browse the database
+npm ci
+npm run build
+MOODLE_TOKEN=... npm start
 ```
 
-## Adding a supplier
+Keep `.data/` on a persistent volume, or set `DATA_DIR`.
 
-Implement `RateProvider` in `src/lib/suppliers/`, register it in
-`src/lib/suppliers/index.ts`. Nothing else changes — the aggregator fans out
-over whatever the registry returns and the comparison UI renders however many
-quotes come back.
+**Vercel:**
+1. Import the repo.
+2. Add the variables above in Project → Settings → Environment Variables.
+3. Add an Upstash Redis (Vercel KV) integration so notes persist.
 
----
+The AI routes set `maxDuration = 300`, which needs a plan that allows long functions.
 
-## Status and known gaps
+Behind a corporate proxy, run Node with `NODE_USE_ENV_PROXY=1` so `fetch` uses `HTTPS_PROXY`.
 
-Verified working: supplier fan-out, cross-supplier matching, best-price
-selection, the full booking flow, the complete split money path including
-partial backstop capture and settlement idempotency (`npm run e2e`), and the
-scraper's robots handling, JSON-LD extraction and never-bookable guarantees.
+## Development
 
-Not yet done, in rough priority order:
+```bash
+npm run typecheck
+npm test
+```
 
-- **The LiteAPI and Amadeus adapters have not been run against the live APIs.**
-  They are written to the documented request/response shapes and parse
-  defensively, but nobody has pointed them at a real key yet. Expect to adjust
-  field paths on first contact.
-- **The scrape targets' URL templates and JSON-LD assumptions are unverified
-  against the live sites** for the same reason — extraction is tested against
-  fixtures, not against Booking.com's actual HTML.
-- Notifications. Friends currently have to open the app to see a share request;
-  it should reach them by push or email.
-- Stripe webhooks. Authorizations can fail asynchronously, and nothing currently
-  listens for that.
-- Rate caching. Every search hits every supplier live.
+The tests cover timezone handling, the iCal parser, the HTML sanitiser, Markdown safety, Moodle parameter encoding, deadline ranking and lecture/seminar detection.

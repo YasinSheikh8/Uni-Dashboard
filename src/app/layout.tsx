@@ -1,86 +1,71 @@
 import type { Metadata, Viewport } from "next";
+import { cookies } from "next/headers";
 import Link from "next/link";
-import { getCurrentUser } from "@/lib/auth";
+import { FlaskConical, Radio } from "lucide-react";
+import { APP_DESCRIPTION, APP_NAME } from "@/config/app";
+import { configuredMode } from "@/lib/data/source";
+import { BottomNav, Sidebar, TopBar } from "@/components/nav";
+import { SearchPalette } from "@/components/search-palette";
+import { RegisterServiceWorker, ReminderAgent } from "@/components/client-bits";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "BKR — one room, one tap, split however you like",
-  description:
-    "Every supplier priced at once, the cheaper one surfaced, one-tap booking and payment splitting built in.",
+  title: { default: APP_NAME, template: `%s · ${APP_NAME}` },
+  description: APP_DESCRIPTION,
+  applicationName: APP_NAME,
+  appleWebApp: { capable: true, title: APP_NAME, statusBarStyle: "black-translucent" },
+  robots: { index: false, follow: false },
 };
 
 export const viewport: Viewport = {
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#fcfcfd" },
-    { media: "(prefers-color-scheme: dark)", color: "#08080b" },
-  ],
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#0c0d10",
 };
 
-async function Header() {
-  const user = await getCurrentUser();
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const jar = await cookies();
+  const t = jar.get("w1_theme")?.value;
+  const theme = t === "light" || t === "system" ? t : "dark";
+  const mode = configuredMode();
+
+  const chip =
+    mode === "demo" ? (
+      <Link href="/settings" className="inline-flex min-h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-warn/40 bg-warn-soft px-3 text-xs font-medium text-warn">
+        <FlaskConical size={14} aria-hidden /> Demo
+      </Link>
+    ) : (
+      <Link href="/settings" className="inline-flex min-h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-line px-3 text-xs font-medium text-muted" title="Connected to Moodle">
+        <Radio size={14} className="text-ok" aria-hidden /> <span className="hidden sm:inline">Live ·</span> Moodle
+      </Link>
+    );
 
   return (
-    <header className="sticky top-0 z-50 border-b border-[var(--color-border)]/60 bg-[var(--color-canvas)]/70 backdrop-blur-xl">
-      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
-        <Link
-          href="/"
-          className="flex items-center gap-2.5 text-[0.9375rem] font-semibold tracking-[-0.01em]"
-        >
-          {/* Mark: three planes converging — the same idea as the hero object,
-              reduced to something that survives at 18px. */}
-          <span
-            className="grid h-[22px] w-[22px] place-items-center rounded-[7px]"
-            style={{
-              background:
-                "linear-gradient(140deg, var(--aurora-1) 0%, var(--aurora-2) 60%, var(--aurora-3) 130%)",
-            }}
-          >
-            <span className="h-[7px] w-[7px] rounded-[2px] bg-white/90" />
-          </span>
-          BKR
-        </Link>
-
-        <nav className="flex items-center gap-1">
-          {user ? (
-            <>
-              <Link href="/bookings" className="btn btn-ghost text-sm">
-                Trips
-              </Link>
-              <Link href="/account" className="btn btn-ghost text-sm">
-                Account
-              </Link>
-              <span
-                className="ml-1.5 grid h-8 w-8 place-items-center rounded-full text-xs font-semibold text-white"
-                style={{ background: user.avatarColor }}
-                title={user.name}
-              >
-                {user.name.slice(0, 1).toUpperCase()}
-              </span>
-            </>
-          ) : (
-            <>
-              <Link href="/signin" className="btn btn-ghost text-sm">
-                Sign in
-              </Link>
-              <Link href="/signup" className="btn btn-primary text-sm">
-                Get started
-              </Link>
-            </>
-          )}
-        </nav>
-      </div>
-    </header>
-  );
-}
-
-export default function RootLayout({
-  children,
-}: Readonly<{ children: React.ReactNode }>) {
-  return (
-    <html lang="en">
-      <body className="min-h-screen">
-        <Header />
-        <main>{children}</main>
+    <html lang="en-GB" data-theme={theme}>
+      <body>
+        <a href="#main" className="skip-link rounded-lg bg-accent px-4 py-2 font-medium text-on-accent">
+          Skip to content
+        </a>
+        <div className="flex min-h-dvh">
+          <Sidebar modeChip={<div className="px-3">{chip}</div>} />
+          <div className="flex min-w-0 flex-1 flex-col">
+            <TopBar modeChip={chip} />
+            {mode === "demo" && (
+              <div className="border-b border-warn/30 bg-warn-soft px-4 py-2 text-center text-sm text-fg" role="status">
+                You&apos;re viewing <strong>sample data</strong>. Nothing here is from your Moodle account.{" "}
+                <Link href="/settings" className="text-warn underline underline-offset-2">Connect Moodle</Link>
+              </div>
+            )}
+            <main id="main" className="mx-auto w-full max-w-6xl flex-1 px-4 pb-28 pt-6 sm:px-6 lg:px-10 lg:pb-12 lg:pt-10">
+              {children}
+            </main>
+          </div>
+        </div>
+        <BottomNav />
+        <SearchPalette />
+        <RegisterServiceWorker />
+        <ReminderAgent />
       </body>
     </html>
   );
