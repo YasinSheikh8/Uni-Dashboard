@@ -3,7 +3,9 @@ import { Brain, ChevronRight } from "lucide-react";
 import { attempt, getSource } from "@/lib/data/source";
 import { unitsFor } from "@/lib/sessions";
 import { dueCount, getStudyProgress, getStudySet } from "@/lib/store/user-data";
-import { Badge, EmptyState, PageHeader, ProblemState } from "@/components/ui";
+import { Badge, Card, EmptyState, PageHeader, ProblemState } from "@/components/ui";
+import { BulkFlashcards, type PendingUnit } from "@/components/bulk-flashcards";
+import { aiConfigured } from "@/lib/ai/generate";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Study" };
@@ -15,6 +17,7 @@ export default async function StudyPage() {
   const now = Date.now();
   const user = await source.userKey();
   const current = mods.data.filter((m) => !m.endDate || m.endDate > now - 30 * 86400000);
+  const pending: PendingUnit[] = [];
   const rows = await Promise.all(
     current.map(async (m) => {
       const detail = await source.module(m.id).catch(() => null);
@@ -24,6 +27,8 @@ export default async function StudyPage() {
       for (const u of units) {
         const [set, prog] = await Promise.all([getStudySet(user, m.id, u.section.id).catch(() => null), getStudyProgress(user, m.id, u.section.id)]);
         cards += set?.cards.length ?? 0;
+        if (!set?.cards.some((c) => c.origin !== "custom") && u.studyResources.length)
+          pending.push({ courseId: m.id, sectionId: u.section.id, code: m.code, label: u.label });
         due += dueCount(set, prog, now);
       }
       return { m, units: units.length, cards, due };
@@ -32,6 +37,13 @@ export default async function StudyPage() {
   return (
     <>
       <PageHeader title="Study" subtitle="Flashcards, quizzes and revision notes for every module, unit by unit." />
+      {rows.length > 0 && (
+        <Card className="mb-6">
+          <h2 className="mb-1 font-semibold">Flashcards for every module</h2>
+          <p className="mb-3 text-sm text-muted">Make flashcards and a quiz for each unit that doesn&apos;t have them yet, from its Moodle materials. Units you&apos;ve already got cards for are left alone.</p>
+          <BulkFlashcards pending={pending} aiReady={aiConfigured()} demo={source.mode === "demo"} />
+        </Card>
+      )}
       {!rows.length && <EmptyState icon={<Brain size={28} />} title="No current modules" />}
       <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {rows.map(({ m, units, cards, due }) => (

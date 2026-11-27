@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Brain, BookOpen, CalendarDays, ClipboardCheck, FileText, Home, LayoutGrid, Link2, NotebookPen, Search, Settings } from "lucide-react";
+import { MessageCircle, Brain, BookOpen, CalendarDays, ClipboardCheck, FileText, Home, LayoutGrid, Link2, NotebookPen, Search, Settings } from "lucide-react";
 import { APP_NAME } from "@/config/app";
 import { cx } from "./ui";
 import { openSearch } from "./search-palette";
@@ -11,6 +11,7 @@ const NAV = [
   { href: "/", label: "Home", icon: Home, mobile: true },
   { href: "/modules", label: "Modules", icon: BookOpen, mobile: true },
   { href: "/study", label: "Study", icon: Brain, mobile: true },
+  { href: "/ask", label: "Ask", icon: MessageCircle, mobile: true },
   { href: "/materials", label: "Materials", icon: FileText },
   { href: "/assessments", label: "Deadlines", icon: ClipboardCheck },
   { href: "/timetable", label: "Timetable", icon: CalendarDays, mobile: true },
@@ -76,7 +77,13 @@ export function Sidebar({ modeChip }: { modeChip: React.ReactNode }) {
 
 export function TopBar({ modeChip }: { modeChip: React.ReactNode }) {
   return (
-    <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-line bg-canvas/90 px-4 backdrop-blur lg:hidden" style={{ paddingTop: "env(safe-area-inset-top)" }}>
+    // The safe-area padding sits outside the 56px row, so in iPhone home-screen
+    // mode the bar grows below the status bar instead of being squashed under it.
+    <header
+      className="sticky top-0 z-30 border-b border-line bg-canvas/95 backdrop-blur lg:hidden"
+      style={{ paddingTop: "env(safe-area-inset-top)", paddingLeft: "env(safe-area-inset-left)", paddingRight: "env(safe-area-inset-right)" }}
+    >
+      <div className="flex h-14 items-center gap-2 px-4">
       <Link href="/" className="flex min-w-0 items-center gap-2">
         <Logo />
         <span className="truncate whitespace-nowrap font-semibold tracking-tight">{APP_NAME}</span>
@@ -86,9 +93,10 @@ export function TopBar({ modeChip }: { modeChip: React.ReactNode }) {
         <button type="button" onClick={openSearch} className="flex size-11 items-center justify-center rounded-xl text-muted hover:bg-surface-2 hover:text-fg" aria-label="Search">
           <Search size={20} aria-hidden />
         </button>
-        <Link href="/settings" className="flex size-11 items-center justify-center rounded-xl text-muted hover:bg-surface-2 hover:text-fg" aria-label="Settings">
-          <Settings size={20} aria-hidden />
+        <Link href="/more" className="flex size-11 items-center justify-center rounded-xl text-muted hover:bg-surface-2 hover:text-fg" aria-label="More: materials, deadlines, notes, links and settings">
+          <LayoutGrid size={20} aria-hidden />
         </Link>
+      </div>
       </div>
     </header>
   );
@@ -96,7 +104,7 @@ export function TopBar({ modeChip }: { modeChip: React.ReactNode }) {
 
 export function BottomNav() {
   const pathname = usePathname();
-  const items = [...NAV.filter((n) => n.mobile), { href: "/more", label: "More", icon: LayoutGrid }];
+  const items = NAV.filter((n) => n.mobile);
   const moreActive = ["/materials", "/assessments", "/notes", "/links", "/more", "/search"].some((p) => isActive(pathname, p));
   return (
     <nav aria-label="Main" className="pb-safe fixed inset-x-0 bottom-0 z-30 border-t border-line bg-canvas/95 backdrop-blur lg:hidden">

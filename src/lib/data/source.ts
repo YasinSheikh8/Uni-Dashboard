@@ -28,13 +28,73 @@ export function configuredMode(): DataMode {
   return moodleConfig().token ? "live" : "demo";
 }
 
-export const getSource = cache(async (): Promise<StudySource> => {
+/**
+ * Wraps a source so modules you've hidden disappear from every tab: module
+ * lists, materials, deadlines, the calendar, study units and automatic notes.
+ * A hidden module's own page still opens, so it can be shown again.
+ */
+export class FilteredSource implements StudySource {
+  readonly mode: DataMode;
+  private hidden?: Promise<Set<number>>;
+  constructor(readonly inner: StudySource) {
+    this.mode = inner.mode;
+  }
+  hiddenIds() {
+    this.hidden ??= (async () => {
+      const { getSettings } = await import("@/lib/store/user-data");
+      const s = await getSettings(await this.inner.userKey()).catch(() => ({ hiddenModules: [] as number[] }));
+      return new Set(s.hiddenModules ?? []);
+    })();
+    return this.hidden;
+  }
+  async hiddenCodes() {
+    const ids = await this.hiddenIds();
+    return (await this.inner.modules()).filter((m) => ids.has(m.id)).map((m) => m.code);
+  }
+  /** Every module, including hidden ones (for the Modules page). */
+  allModules() {
+    return this.inner.modules();
+  }
+  info() {
+    return this.inner.info();
+  }
+  userKey() {
+    return this.inner.userKey();
+  }
+  async modules() {
+    const ids = await this.hiddenIds();
+    return (await this.inner.modules()).filter((m) => !ids.has(m.id));
+  }
+  module(id: number) {
+    return this.inner.module(id);
+  }
+  async resources() {
+    const ids = await this.hiddenIds();
+    return (await this.inner.resources()).filter((r) => !ids.has(r.courseId));
+  }
+  async assessments() {
+    const ids = await this.hiddenIds();
+    return (await this.inner.assessments()).filter((a) => !ids.has(a.courseId));
+  }
+  async calendar(from: number, to: number) {
+    const ids = await this.hiddenIds();
+    return (await this.inner.calendar(from, to)).filter((e) => !e.courseId || !ids.has(e.courseId));
+  }
+  pageText(courseId: number, cmid: number) {
+    return this.inner.pageText(courseId, cmid);
+  }
+  download(file: FileRef, maxBytes: number) {
+    return this.inner.download(file, maxBytes);
+  }
+}
+
+export const getSource = cache(async (): Promise<FilteredSource> => {
   if (configuredMode() === "demo") {
     const { DemoSource } = await import("./demo-source");
-    return new DemoSource();
+    return new FilteredSource(new DemoSource());
   }
   const { MoodleSource } = await import("./moodle-source");
-  return new MoodleSource();
+  return new FilteredSource(new MoodleSource());
 });
 
 export type SourceProblem = { kind: MoodleError["code"] | "unknown"; message: string };

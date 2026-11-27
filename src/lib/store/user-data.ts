@@ -115,6 +115,8 @@ export function genericChecklist(kind: "assignment" | "quiz" | "event"): Checkli
 export interface UserSettings {
   /** Personal timetable feed (e.g. Tabula's calendar subscription link). Never sent back to the browser. */
   timetableIcsUrl?: string;
+  /** Moodle course ids you've chosen to hide from every tab. */
+  hiddenModules?: number[];
 }
 export async function getSettings(user: string) {
   return (await store().get<UserSettings>(`${user}:settings`)) ?? {};
