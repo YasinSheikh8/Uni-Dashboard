@@ -149,7 +149,7 @@ export function readLimitError(status: number, message: string, retryAfter?: str
   return { tooLarge, waitMs: Number.isNaN(waitMs) ? null : Math.ceil(waitMs) };
 }
 
-async function call<T>(schema: z.ZodType<T>, materials: Material[], task: string): Promise<T> {
+async function call<T>(schema: z.ZodType<T>, materials: Material[], task: string, opts: { minOutputTokens?: number } = {}): Promise<T> {
   if (!aiConfigured()) throw new AiUnavailable("AI generation is not configured (set GROQ_API_KEY or AI_API_KEY).");
   const jsonSchema = z.toJSONSchema(schema);
   const limits = aiLimits();
@@ -157,7 +157,7 @@ async function call<T>(schema: z.ZodType<T>, materials: Material[], task: string
   let lastError = "The AI response couldn't be read.";
   for (let attempt = 0; attempt < 5; attempt++) {
     const inputChars = Math.max(2_000, Math.floor(limits.maxInputChars * scale));
-    const maxTokens = Math.max(1_200, Math.floor(limits.maxOutputTokens * Math.max(scale, 0.5)));
+    const maxTokens = Math.max(1_200, Math.floor(Math.max(limits.maxOutputTokens, opts.minOutputTokens ?? 0) * Math.max(scale, 0.5)));
     const messages = [
       { role: "system", content: RULES },
       { role: "user", content: `${sourceText(materials, inputChars)}\n\nTask: ${task}\n\nJSON Schema for your reply:\n${JSON.stringify(jsonSchema)}` },
@@ -354,7 +354,7 @@ export async function generateSessionNotes(source: StudySource, mod: ModuleDetai
 
 // ---- Flashcards + quiz for a unit ----------------------------------------------
 const StudySetSchema = z.object({
-  flashcards: z.array(z.object({ front: z.string().describe("A question or term"), back: z.string().describe("A short answer, under 40 words"), sources: z.array(z.string()) })).describe("10-20 cards"),
+  flashcards: z.array(z.object({ front: z.string().describe("A question or term"), back: z.string().describe("A short answer, under 40 words"), sources: z.array(z.string()) })).describe("8-15 cards"),
   quiz: z
     .array(
       z.object({
@@ -365,7 +365,7 @@ const StudySetSchema = z.object({
         sources: z.array(z.string()),
       }),
     )
-    .describe("6-10 multiple-choice questions"),
+    .describe("5-8 multiple-choice questions"),
   gaps: z.array(z.string()),
 });
 
@@ -376,6 +376,7 @@ export async function generateStudySet(source: StudySource, mod: ModuleDetail, s
     StudySetSchema,
     materials,
     `Make flashcards and a multiple-choice quiz for "${section.name}" in ${mod.code} ${mod.fullName}. Test understanding of what the sources actually teach. Wrong options must be plausible but clearly wrong according to the sources.`,
+    { minOutputTokens: 4_000 },
   );
   const valid = new Set(materials.map((m) => m.id));
   const title = (ids: string[]) => ids.filter((i) => valid.has(i)).map((i) => materials.find((m) => m.id === i)!.title);
@@ -392,4 +393,24 @@ export async function generateStudySet(source: StudySource, mod: ModuleDetail, s
     sourceLinks: materials.map((m) => ({ title: m.title, url: m.url })),
     gaps: [...out.gaps, ...unread.map((u) => `Couldn't read "${u}" (not a PDF or page).`)],
   };
+}
+
+/** Streaming chat completion for the Ask tab. Returns the provider's raw SSE response. */
+export async function chatStream(messages: { role: "system" | "user" | "assistant"; content: string }[], maxTokens = 1200) {
+  if (!aiConfigured()) throw new AiUnavailable("The chatbot needs an AI key on the server (GROQ_API_KEY or AI_API_KEY).");
+  const groq = new URL(aiBaseUrl()).hostname.endsWith("groq.com");
+  return fetch(`${aiBaseUrl()}/chat/completions`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${aiKey()}`, "Content-Type": "application/json", "X-Title": "Study dashboard" },
+    body: JSON.stringify({
+      model: aiModel(),
+      messages,
+      stream: true,
+      temperature: 0.3,
+      max_tokens: maxTokens,
+      // Keep gpt-oss's hidden reasoning short on Groq's free plan.
+      ...(groq ? { reasoning_effort: "low" } : {}),
+    }),
+    signal: AbortSignal.timeout(120_000),
+  });
 }

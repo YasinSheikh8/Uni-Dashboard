@@ -1,10 +1,12 @@
 import Link from "next/link";
-import { ChevronRight, ClipboardCheck, FileText, Link2, NotebookPen, Search, Settings } from "lucide-react";
+import { CalendarDays, ChevronRight, ClipboardCheck, FileText, MessageCircle, Link2, NotebookPen, Search, Settings } from "lucide-react";
 import { PageHeader } from "@/components/ui";
 
 export const metadata = { title: "More" };
 
 const ITEMS = [
+  { href: "/ask", label: "Ask", desc: "Chatbot for anything uni-related", Icon: MessageCircle },
+  { href: "/timetable", label: "Timetable", desc: "Your lectures, seminars and Moodle dates", Icon: CalendarDays },
   { href: "/assessments", label: "Deadlines & tests", desc: "Moodle quizzes, assignments and action plans", Icon: ClipboardCheck },
   { href: "/materials", label: "Materials", desc: "Slides, readings, recordings and handouts", Icon: FileText },
   { href: "/notes", label: "Notes & study guides", desc: "Your notes and AI study guides", Icon: NotebookPen },

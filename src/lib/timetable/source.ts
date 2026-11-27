@@ -46,7 +46,10 @@ export async function getTimetable(
   from: number,
   to: number,
 ): Promise<{ items: TimetableItem[]; coverage: TimetableCoverage; moodleError?: string }> {
-  const modules = await source.modules().catch(() => []);
+  // Match feed events against every module (hidden ones too), then drop hidden ones.
+  const filtered = source as Partial<{ allModules: () => Promise<Awaited<ReturnType<StudySource["modules"]>>>; hiddenCodes: () => Promise<string[]> }>;
+  const modules = await (filtered.allModules ? filtered.allModules() : source.modules()).catch(() => []);
+  const hiddenCodes = new Set(await (filtered.hiddenCodes ? filtered.hiddenCodes() : Promise.resolve([])).catch(() => [] as string[]));
   const codes = modules.map((m) => m.code);
   let moodleError: string | undefined;
   const moodleItems = await source.calendar(from, to).catch((e) => {
@@ -97,5 +100,5 @@ export async function getTimetable(
       coverage.feedError = e instanceof Error ? e.message : "Couldn't read the timetable feed";
     }
   }
-  return { items: items.sort((a, b) => a.start - b.start), coverage, moodleError };
+  return { items: items.filter((i) => !i.moduleCode || !hiddenCodes.has(i.moduleCode)).sort((a, b) => a.start - b.start), coverage, moodleError };
 }

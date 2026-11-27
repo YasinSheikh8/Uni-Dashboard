@@ -9,6 +9,7 @@ import { listNotes } from "@/lib/store/user-data";
 import { AssessmentRow, ResourceRow } from "@/components/rows";
 import { AiTag, Badge, ButtonLink, Card, EmptyState, ExternalLink, Notice, ProblemState, cx } from "@/components/ui";
 import { GenerateGuideButton } from "@/components/study-actions";
+import { ModuleVisibilityButton } from "@/components/module-visibility";
 import { dayLabel, formatDateTime, londonDateKey, weekStartKey, formatShortDayKey } from "@/lib/time";
 import { createHash } from "node:crypto";
 import { unitsFor, type Unit } from "@/lib/sessions";
@@ -44,6 +45,7 @@ export default async function ModulePage({ params, searchParams }: { params: Pro
   const recordings = allResources.filter((r) => r.kind === "recording").length;
   const ai = aiConfigured();
   const units = unitsFor(mod);
+  const isHidden = (await source.hiddenIds()).has(mod.id);
   const user = await source.userKey();
   const tabs: { key: Tab; label: string; count?: number }[] = [
     { key: "materials", label: "Materials", count: allResources.filter((r) => MATERIAL_KINDS.includes(r.kind)).length },
@@ -63,9 +65,17 @@ export default async function ModulePage({ params, searchParams }: { params: Pro
           <span className="rounded-md bg-accent-soft px-2 py-0.5 text-xs font-semibold tracking-wide text-accent">{mod.code}</span>
           <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-[1.75rem]">{mod.fullName}</h1>
         </div>
-        <ButtonLink href={mod.url} external>Open on Moodle</ButtonLink>
+        <div className="flex items-center gap-2">
+          <ModuleVisibilityButton courseId={mod.id} code={mod.code} hidden={isHidden} />
+          <ButtonLink href={mod.url} external>Open on Moodle</ButtonLink>
+        </div>
       </header>
 
+      {isHidden && (
+        <div className="mb-4">
+          <Notice tone="warn">This module is hidden, so it doesn&apos;t appear on Home, Study, Materials, Deadlines, Timetable or in automatic notes.</Notice>
+        </div>
+      )}
       <div role="tablist" aria-label="Module sections" className="mb-5 flex gap-1 overflow-x-auto border-b border-line">
         {tabs.map((t) => (
           <Link
@@ -237,12 +247,12 @@ async function RevisionTab({ mod, units, user, ai }: { mod: ModuleDetail; units:
                 <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
                   {list.map((i) => {
                     const key = ttKey(i.id);
-                    const label = `${i.sessionType === "lecture" ? "Lecture" : "Seminar"} · ${formatDateTime(i.start)}`;
+                    const label = `${i.sessionType === "lecture" ? "Lecture" : "Seminar"} · ${formatDateTime(i.start)}${i.location ? ` · ${i.location}` : ""}`;
                     return (
                       <SessionNoteCard
                         key={key}
                         aiAvailable={false}
-                        s={{ key, label, kind: i.sessionType === "lecture" ? "lecture" : "seminar", courseId: mod.id, sectionName: [i.location, i.title.replace(/^\S+\s/, "")].filter(Boolean).join(" · "), moduleCode: mod.code, materials: [], note: noteView(byKey.get(key)) }}
+                        s={{ key, label, kind: i.sessionType === "lecture" ? "lecture" : "seminar", courseId: mod.id, sectionName: `Week of ${formatShortDayKey(wk)}`, moduleCode: mod.code, materials: [], note: noteView(byKey.get(key)) }}
                       />
                     );
                   })}

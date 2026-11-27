@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { AiUnavailable, generateStudySet } from "@/lib/ai/generate";
+import { AiRateLimited, AiUnavailable, generateStudySet } from "@/lib/ai/generate";
 import { getSource } from "@/lib/data/source";
 import { bad, sameOrigin } from "@/lib/http";
 import { unitsFor } from "@/lib/sessions";
@@ -46,7 +46,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ courseI
       await saveStudySet(user, courseId, sectionId, set);
       return NextResponse.json({ set });
     } catch (e) {
-      if (e instanceof AiUnavailable) return bad("AI isn't set up on the server, so flashcards can't be generated. You can still add your own.", 503);
+      if (e instanceof AiUnavailable) return bad(`AI isn't available: ${e.message}. You can still add your own cards.`, 503);
+      if (e instanceof AiRateLimited) return bad(e.message, 429);
       console.error("[dashboard] study set failed:", e instanceof Error ? e.message : e);
       return bad(e instanceof Error && !/api[_ ]?key|token/i.test(e.message) ? e.message : "Couldn't generate flashcards.", 502);
     }
